@@ -1,4 +1,5 @@
-import { useState, useEffect, useRef } from "react";
+
+import { useState, useEffect } from "react";
 import { useParams } from "react-router-dom";
 import { 
   Play, 
@@ -12,8 +13,7 @@ import {
   BarChart3,
   MessageSquare,
   ChevronsUpDown,
-  Zap,
-  FileAudio
+  Zap
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -21,7 +21,7 @@ import { Progress } from "@/components/ui/progress";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/components/ui/use-toast";
 import { 
-  getRecording,
+  processRecording, 
   transcribeAudio, 
   analyzeTranscript,
   type Recording,
@@ -38,7 +38,6 @@ import {
 export default function Analysis() {
   const { id } = useParams<{ id: string }>();
   const { toast } = useToast();
-  const videoRef = useRef<HTMLVideoElement>(null);
   
   const [recording, setRecording] = useState<Recording | null>(null);
   const [transcript, setTranscript] = useState<Transcript | null>(null);
@@ -51,49 +50,23 @@ export default function Analysis() {
   
   const [isTranscribing, setIsTranscribing] = useState<boolean>(false);
   const [isAnalyzing, setIsAnalyzing] = useState<boolean>(false);
-  const [isLoading, setIsLoading] = useState<boolean>(true);
-  const [mediaError, setMediaError] = useState<boolean>(false);
   
+  // Mock loading the recording
   useEffect(() => {
     const fetchRecording = async () => {
-      if (!id) {
-        toast({
-          title: "Error",
-          description: "No recording ID provided.",
-          variant: "destructive",
-        });
-        setIsLoading(false);
-        return;
-      }
-      
       try {
-        const result = await getRecording(id);
-        if (result) {
-          setRecording(result);
-          
-          if ((!result.videoUrl && result.isVideo) || (!result.audioUrl && !result.isVideo)) {
-            setMediaError(true);
-            toast({
-              title: "Media not available",
-              description: "The media file could not be loaded from storage. It may have exceeded browser storage limits.",
-              variant: "destructive",
-            });
-          }
-          
-          if (result.transcript) {
-            setTranscript(result.transcript);
-          }
-          
-          if (result.analysis) {
-            setAnalysis(result.analysis);
-          }
-        } else {
-          toast({
-            title: "Recording not found",
-            description: "Could not find the requested recording.",
-            variant: "destructive",
-          });
-        }
+        // Mock API call to get recording by ID
+        // In a real app, this would be an actual API call
+        const mockRecording: Recording = {
+          id: id || "rec123",
+          title: "AI Presentation",
+          date: new Date().toISOString(),
+          duration: 45,
+          videoUrl: "https://www.sample-videos.com/video321/mp4/480/big_buck_bunny_480p_1mb.mp4", // Example URL
+          audioUrl: "https://www.sample-videos.com/video321/mp4/480/big_buck_bunny_480p_1mb.mp4", // Example URL
+        };
+        
+        setRecording(mockRecording);
       } catch (error) {
         console.error("Error fetching recording:", error);
         toast({
@@ -101,8 +74,6 @@ export default function Analysis() {
           description: "Failed to load the recording. Please try again.",
           variant: "destructive",
         });
-      } finally {
-        setIsLoading(false);
       }
     };
     
@@ -117,14 +88,6 @@ export default function Analysis() {
     try {
       const result = await transcribeAudio(recording.id);
       setTranscript(result);
-      
-      if (recording) {
-        const updatedRecording = { ...recording, transcript: result };
-        setRecording(updatedRecording);
-        
-        localStorage.setItem(`recording_${recording.id}`, JSON.stringify(updatedRecording));
-      }
-      
       toast({
         title: "Transcription complete",
         description: "Your speech has been transcribed successfully.",
@@ -156,14 +119,6 @@ export default function Analysis() {
     try {
       const result = await analyzeTranscript(transcript.text);
       setAnalysis(result);
-      
-      if (recording) {
-        const updatedRecording = { ...recording, analysis: result };
-        setRecording(updatedRecording);
-        
-        localStorage.setItem(`recording_${recording.id}`, JSON.stringify(updatedRecording));
-      }
-      
       toast({
         title: "Analysis complete",
         description: "Your speech has been analyzed successfully.",
@@ -187,46 +142,19 @@ export default function Analysis() {
   };
   
   const handlePlayPause = () => {
-    if (videoRef.current) {
-      if (isPlaying) {
-        videoRef.current.pause();
-      } else {
-        videoRef.current.play();
-      }
-      setIsPlaying(!isPlaying);
-    }
+    setIsPlaying(!isPlaying);
   };
   
   const handleMuteToggle = () => {
-    if (videoRef.current) {
-      videoRef.current.muted = !isMuted;
-      setIsMuted(!isMuted);
-    }
+    setIsMuted(!isMuted);
   };
   
   const handleSkipBack = () => {
-    if (videoRef.current) {
-      videoRef.current.currentTime = Math.max(0, videoRef.current.currentTime - 10);
-      setCurrentTime(videoRef.current.currentTime);
-    }
+    setCurrentTime(Math.max(0, currentTime - 10));
   };
   
   const handleSkipForward = () => {
-    if (videoRef.current) {
-      videoRef.current.currentTime = Math.min(videoRef.current.duration, videoRef.current.currentTime + 10);
-      setCurrentTime(videoRef.current.currentTime);
-    }
-  };
-  
-  const handleProgressChange = (e: React.MouseEvent<HTMLDivElement>) => {
-    if (!videoRef.current) return;
-    
-    const progressBar = e.currentTarget;
-    const rect = progressBar.getBoundingClientRect();
-    const pos = (e.clientX - rect.left) / rect.width;
-    
-    videoRef.current.currentTime = pos * duration;
-    setCurrentTime(videoRef.current.currentTime);
+    setCurrentTime(Math.min(duration, currentTime + 10));
   };
   
   const getScoreColor = (score: number) => {
@@ -237,11 +165,7 @@ export default function Analysis() {
   
   return (
     <div className="container mx-auto px-4 py-8 max-w-6xl">
-      {isLoading ? (
-        <div className="flex justify-center py-16">
-          <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-primary"></div>
-        </div>
-      ) : recording ? (
+      {recording ? (
         <>
           <div className="mb-8">
             <h1 className="text-3xl font-bold text-primary mb-2">{recording.title}</h1>
@@ -251,109 +175,61 @@ export default function Analysis() {
           </div>
           
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+            {/* Video/Audio Player Section */}
             <div className="lg:col-span-2">
               <Card className="mb-8">
                 <CardHeader className="pb-0">
                   <CardTitle>Recording Playback</CardTitle>
                 </CardHeader>
                 <CardContent>
+                  {/* Video Player */}
                   <div className="aspect-video bg-black rounded-md overflow-hidden mb-4">
-                    {!mediaError && recording.isVideo && recording.videoUrl ? (
+                    {recording.videoUrl ? (
                       <video
-                        ref={videoRef}
                         src={recording.videoUrl}
                         className="w-full h-full"
+                        controls
                         playsInline
-                        muted={isMuted}
-                        onTimeUpdate={(e) => setCurrentTime(e.currentTarget.currentTime)}
-                        onLoadedMetadata={(e) => setDuration(e.currentTarget.duration)}
-                        onPlay={() => setIsPlaying(true)}
-                        onPause={() => setIsPlaying(false)}
-                        onError={() => {
-                          setMediaError(true);
-                          toast({
-                            title: "Media playback error",
-                            description: "There was an error playing this media file.",
-                            variant: "destructive",
-                          });
-                        }}
+                        // These props would be controlled in a real implementation
+                        // muted={isMuted}
+                        // onTimeUpdate={(e) => setCurrentTime(e.currentTarget.currentTime)}
+                        // onLoadedMetadata={(e) => setDuration(e.currentTarget.duration)}
+                        // onPlay={() => setIsPlaying(true)}
+                        // onPause={() => setIsPlaying(false)}
                       />
-                    ) : !mediaError && recording.audioUrl ? (
-                      <div className="w-full h-full flex flex-col items-center justify-center bg-muted">
-                        <audio
-                          ref={videoRef as unknown as React.RefObject<HTMLAudioElement>}
-                          src={recording.audioUrl}
-                          className="w-full"
-                          onTimeUpdate={(e) => setCurrentTime(e.currentTarget.currentTime)}
-                          onLoadedMetadata={(e) => setDuration(e.currentTarget.duration)}
-                          onPlay={() => setIsPlaying(true)}
-                          onPause={() => setIsPlaying(false)}
-                          onError={() => {
-                            setMediaError(true);
-                            toast({
-                              title: "Media playback error",
-                              description: "There was an error playing this audio file.",
-                              variant: "destructive",
-                            });
-                          }}
-                        />
-                        <div className="text-6xl text-muted-foreground mt-8">
-                          <Volume2 />
-                        </div>
-                        <p className="text-muted-foreground mt-4">Audio Recording</p>
-                      </div>
                     ) : (
-                      <div className="w-full h-full flex flex-col items-center justify-center bg-muted">
-                        <div className="text-6xl text-muted-foreground mb-4">
-                          {recording.isVideo ? <Video /> : <FileAudio />}
-                        </div>
-                        <p className="text-muted-foreground mb-2">Media not available</p>
-                        <p className="text-xs text-muted-foreground max-w-md text-center">
-                          The media file could not be loaded. This may be due to browser storage limitations.
-                          For best results, use smaller files or try using the app in a different browser.
-                        </p>
+                      <div className="w-full h-full flex items-center justify-center bg-muted">
+                        <p className="text-muted-foreground">Video not available</p>
                       </div>
                     )}
                   </div>
                   
+                  {/* Custom Controls - These would be functional in a real implementation */}
                   <div className="flex flex-col space-y-2">
                     <div className="flex justify-between text-sm text-muted-foreground">
                       <span>{formatTime(currentTime)}</span>
                       <span>{formatTime(duration)}</span>
                     </div>
-                    <div 
-                      className="relative h-1 bg-muted rounded cursor-pointer overflow-hidden"
-                      onClick={handleProgressChange}
-                    >
-                      <div 
-                        className="absolute top-0 left-0 h-full bg-primary" 
-                        style={{ width: `${(currentTime / (duration || 1)) * 100}%` }} 
-                      />
-                    </div>
+                    <Progress value={(currentTime / duration) * 100} className="h-1" />
                     <div className="flex justify-between items-center pt-2">
                       <div className="flex items-center space-x-2">
-                        <Button variant="ghost" size="icon" onClick={handleMuteToggle} disabled={mediaError}>
+                        <Button variant="ghost" size="icon" onClick={handleMuteToggle}>
                           {isMuted ? <VolumeX className="h-5 w-5" /> : <Volume2 className="h-5 w-5" />}
                         </Button>
                       </div>
                       <div className="flex items-center space-x-2">
-                        <Button variant="ghost" size="icon" onClick={handleSkipBack} disabled={mediaError}>
+                        <Button variant="ghost" size="icon" onClick={handleSkipBack}>
                           <SkipBack className="h-5 w-5" />
                         </Button>
-                        <Button 
-                          variant="default" 
-                          size="icon" 
-                          className="h-10 w-10 rounded-full" 
-                          onClick={handlePlayPause}
-                          disabled={mediaError}
-                        >
+                        <Button variant="default" size="icon" className="h-10 w-10 rounded-full" onClick={handlePlayPause}>
                           {isPlaying ? <Pause className="h-5 w-5" /> : <Play className="h-5 w-5" />}
                         </Button>
-                        <Button variant="ghost" size="icon" onClick={handleSkipForward} disabled={mediaError}>
+                        <Button variant="ghost" size="icon" onClick={handleSkipForward}>
                           <SkipForward className="h-5 w-5" />
                         </Button>
                       </div>
                       <div className="flex items-center space-x-2">
+                        {/* Placeholder for additional controls */}
                         <div className="w-8"></div>
                       </div>
                     </div>
@@ -361,6 +237,7 @@ export default function Analysis() {
                 </CardContent>
               </Card>
               
+              {/* Tabs for Transcript and Analysis */}
               <Tabs defaultValue="transcript" className="mb-8">
                 <TabsList className="grid grid-cols-2">
                   <TabsTrigger value="transcript" className="flex items-center gap-2">
@@ -391,6 +268,8 @@ export default function Analysis() {
                                 <div 
                                   key={index} 
                                   className="p-2 rounded border hover:bg-muted/30 transition-colors cursor-pointer"
+                                  // In a real implementation, this would jump to that segment in the video
+                                  // onClick={() => setCurrentTime(segment.start)}
                                 >
                                   <div className="flex justify-between text-sm mb-1">
                                     <span className="text-muted-foreground">
@@ -435,6 +314,7 @@ export default function Analysis() {
                 <TabsContent value="analysis" className="p-4 border rounded-md mt-2">
                   {analysis ? (
                     <div className="space-y-6">
+                      {/* Overall Score */}
                       <div className="flex flex-col items-center py-4">
                         <div className="relative">
                           <svg className="w-32 h-32">
@@ -466,6 +346,7 @@ export default function Analysis() {
                         <p className="mt-2 font-semibold text-lg">Overall Score</p>
                       </div>
                       
+                      {/* Metrics Grid */}
                       <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
                         <Card>
                           <CardContent className="p-4 text-center">
@@ -531,7 +412,9 @@ export default function Analysis() {
                         </Card>
                       </div>
                       
+                      {/* Details Accordion */}
                       <Accordion type="multiple" className="mt-8">
+                        {/* Filler Words Analysis */}
                         <AccordionItem value="filler-words">
                           <AccordionTrigger>Filler Words</AccordionTrigger>
                           <AccordionContent>
@@ -559,6 +442,7 @@ export default function Analysis() {
                           </AccordionContent>
                         </AccordionItem>
                         
+                        {/* Grammar Issues */}
                         <AccordionItem value="grammar-issues">
                           <AccordionTrigger>Grammar Suggestions</AccordionTrigger>
                           <AccordionContent>
@@ -591,6 +475,7 @@ export default function Analysis() {
                           </AccordionContent>
                         </AccordionItem>
                         
+                        {/* Body Language Analysis - Only shown if available */}
                         {analysis.bodyLanguage && (
                           <AccordionItem value="body-language">
                             <AccordionTrigger>Body Language</AccordionTrigger>
@@ -646,6 +531,7 @@ export default function Analysis() {
                         )}
                       </Accordion>
                       
+                      {/* AI Feedback */}
                       <Card className="mt-8">
                         <CardHeader className="pb-3">
                           <CardTitle className="flex items-center gap-2">
@@ -696,6 +582,7 @@ export default function Analysis() {
               </Tabs>
             </div>
             
+            {/* Analysis Summary Sidebar */}
             <div>
               <Card className="sticky top-4">
                 <CardHeader>
@@ -826,11 +713,8 @@ export default function Analysis() {
           </div>
         </>
       ) : (
-        <div className="flex flex-col items-center justify-center py-16">
-          <p className="text-xl text-muted-foreground mb-4">Recording not found</p>
-          <Button onClick={() => window.history.back()}>
-            Go Back
-          </Button>
+        <div className="flex justify-center py-16">
+          <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-primary"></div>
         </div>
       )}
     </div>

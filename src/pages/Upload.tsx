@@ -1,11 +1,10 @@
 
 import { useState, useRef } from "react";
 import { useNavigate } from "react-router-dom";
-import { Upload as UploadIcon, X, FileVideo, FileAudio, AlertCircle } from "lucide-react";
+import { Upload as UploadIcon, X, FileVideo, FileAudio } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
-import { useToast } from "@/hooks/use-toast";
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { useToast } from "@/components/ui/use-toast";
 import { processRecording } from "@/services/api";
 
 export default function Upload() {
@@ -16,7 +15,6 @@ export default function Upload() {
   const [isDragging, setIsDragging] = useState<boolean>(false);
   const [uploadProgress, setUploadProgress] = useState<number>(0);
   const [isProcessing, setIsProcessing] = useState<boolean>(false);
-  const [sizeWarning, setSizeWarning] = useState<boolean>(false);
   
   const allowedFileTypes = [
     "video/mp4",
@@ -63,13 +61,6 @@ export default function Upload() {
       return;
     }
     
-    // Show warning for large files
-    if (file.size > 20 * 1024 * 1024) {
-      setSizeWarning(true);
-    } else {
-      setSizeWarning(false);
-    }
-    
     // 100MB max file size
     if (file.size > 100 * 1024 * 1024) {
       toast({
@@ -86,7 +77,6 @@ export default function Upload() {
   const removeFile = () => {
     setFile(null);
     setUploadProgress(0);
-    setSizeWarning(false);
     if (fileInputRef.current) {
       fileInputRef.current.value = "";
     }
@@ -103,22 +93,21 @@ export default function Upload() {
     }
     
     setIsProcessing(true);
-    setUploadProgress(0);
     
     // Simulate upload progress
     const progressInterval = setInterval(() => {
       setUploadProgress(prev => {
         const newProgress = prev + 5;
-        if (newProgress >= 95) {
+        if (newProgress >= 100) {
           clearInterval(progressInterval);
-          return 95;
+          return 100;
         }
         return newProgress;
       });
     }, 200);
     
     try {
-      // Process the recording with our updated storage approach
+      // Process the recording
       const recording = await processRecording(file);
       
       // Clear the interval if it's still running
@@ -135,21 +124,9 @@ export default function Upload() {
     } catch (error) {
       console.error("Error processing upload:", error);
       clearInterval(progressInterval);
-      
-      // More specific error message based on the error type
-      let errorMessage = "Failed to process your file. Please try again.";
-      
-      if (error instanceof Error) {
-        if (error.message.includes("storage") || error.message.includes("quota")) {
-          errorMessage = "Storage error. We're using a fallback storage method now.";
-        } else if (error.message.includes("network") || error.message.includes("connection")) {
-          errorMessage = "Network error. Check your internet connection and try again.";
-        }
-      }
-      
       toast({
         title: "Upload Failed",
-        description: errorMessage,
+        description: "Failed to process your file. Please try again.",
         variant: "destructive",
       });
     } finally {
@@ -222,17 +199,6 @@ export default function Upload() {
             </Button>
           </div>
           
-          {sizeWarning && (
-            <Alert variant="destructive" className="mb-6">
-              <AlertCircle className="h-4 w-4" />
-              <AlertTitle>Warning</AlertTitle>
-              <AlertDescription>
-                This file is quite large and may cause browser storage limitations.
-                Consider using a smaller file for better performance.
-              </AlertDescription>
-            </Alert>
-          )}
-          
           {uploadProgress > 0 && (
             <div className="mb-6">
               <div className="flex justify-between mb-2">
@@ -275,8 +241,7 @@ export default function Upload() {
           <li>For best results, ensure clear audio with minimal background noise</li>
           <li>If uploading video, ensure good lighting and framing</li>
           <li>Supported formats: MP4, WebM, MOV, MP3, WAV, OGG</li>
-          <li>Maximum file size: 100MB (recommended: under 20MB)</li>
-          <li>Larger files may exceed browser storage limits</li>
+          <li>Maximum file size: 100MB</li>
         </ul>
       </div>
     </div>

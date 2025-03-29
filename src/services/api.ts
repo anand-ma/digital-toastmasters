@@ -40,180 +40,24 @@ export interface Recording {
   duration: number;
   videoUrl?: string;
   audioUrl?: string;
-  isVideo?: boolean;
   transcript?: Transcript;
   analysis?: SpeechAnalysisResult;
 }
 
-// LocalStorage keys
-const STORAGE_KEYS = {
-  RECORDINGS: "recordings",
-  RECORDING_PREFIX: "recording_"
-};
-
-import { supabase } from "@/integrations/supabase/client";
-
-// Store media file in Supabase Storage or localStorage as fallback
-const storeMediaInSupabase = async (id: string, file: File): Promise<string> => {
-  try {
-    const fileExt = file.name.split('.').pop();
-    const filePath = `${id}.${fileExt}`;
-    
-    // Upload file to 'recordings' bucket
-    const { data, error } = await supabase.storage
-      .from('recordings')
-      .upload(filePath, file, {
-        cacheControl: '3600',
-        upsert: true
-      });
-      
-    if (error) {
-      console.error('Error uploading to Supabase:', error);
-      
-      // If we have a row-level security error, fallback to localStorage
-      // Fixed: Check error message without accessing statusCode property
-      if (error.message?.includes('row-level security') || 
-          error.message?.includes('403') ||
-          error.message?.includes('Unauthorized')) {
-        
-        console.log('Using localStorage fallback for file storage');
-        // Store file in localStorage as fallback (limited by browser storage)
-        return storeMediaInLocalStorage(id, file);
-      }
-      
-      throw error;
-    }
-    
-    // Get public URL
-    const { data: { publicUrl } } = supabase.storage
-      .from('recordings')
-      .getPublicUrl(filePath);
-      
-    return publicUrl;
-  } catch (error) {
-    console.error('Error storing media in Supabase Storage:', error);
-    throw error;
-  }
-};
-
-// Fallback method to store in localStorage
-const storeMediaInLocalStorage = (id: string, file: File): Promise<string> => {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    
-    reader.onload = () => {
-      try {
-        const dataUrl = reader.result as string;
-        const localId = `media_${id}`;
-        
-        // Store data URL in localStorage
-        localStorage.setItem(localId, dataUrl);
-        
-        resolve(localId);
-      } catch (error) {
-        console.error('Error storing in localStorage:', error);
-        reject(error);
-      }
-    };
-    
-    reader.onerror = () => {
-      reject(new Error('Failed to read file'));
-    };
-    
-    // Read file as data URL
-    reader.readAsDataURL(file);
-  });
-};
-
-// Get media URL from Supabase or localStorage
-export const getMediaFromSupabase = (url: string): string | null => {
-  try {
-    // Check if this is a localStorage reference
-    if (url.startsWith('media_')) {
-      return localStorage.getItem(url);
-    }
-    // Otherwise return the Supabase URL
-    return url;
-  } catch (error) {
-    console.error('Error retrieving media URL:', error);
-    return null;
-  }
-};
-
-// Store recording in localStorage
-const storeRecording = (recording: Recording): void => {
-  try {
-    // Get existing recordings or initialize empty array
-    const existingRecordingsJson = localStorage.getItem(STORAGE_KEYS.RECORDINGS);
-    const existingRecordings: string[] = existingRecordingsJson ? JSON.parse(existingRecordingsJson) : [];
-    
-    // Add new recording ID if not already present
-    if (!existingRecordings.includes(recording.id)) {
-      existingRecordings.push(recording.id);
-      localStorage.setItem(STORAGE_KEYS.RECORDINGS, JSON.stringify(existingRecordings));
-    }
-    
-    // Store the recording metadata (without the actual media content)
-    localStorage.setItem(`${STORAGE_KEYS.RECORDING_PREFIX}${recording.id}`, JSON.stringify(recording));
-  } catch (error) {
-    console.error("Error storing recording:", error);
-    throw error; // Rethrow to handle in the UI
-  }
-};
-
 // Mock function to process a recording
 export async function processRecording(file: File): Promise<Recording> {
   // Simulate API call delay
-  await new Promise(resolve => setTimeout(resolve, 1000));
+  await new Promise(resolve => setTimeout(resolve, 2000));
   
-  // Generate a unique ID for the recording
-  const id = Math.random().toString(36).substring(2, 15);
-  
-  // Determine if it's a video or audio file
-  const isVideo = file.type.startsWith('video');
-  
-  try {
-    // Upload file to Supabase storage or fallback to localStorage
-    const mediaUrl = await storeMediaInSupabase(id, file);
-    
-    // Create recording object with references
-    const recording: Recording = {
-      id,
-      title: file.name.split(".")[0] || "Untitled Recording",
-      date: new Date().toISOString(),
-      duration: 45, // We'll assume 45 seconds for now
-      isVideo,
-      // Set the appropriate URL
-      ...(isVideo ? { videoUrl: mediaUrl } : { audioUrl: mediaUrl })
-    };
-    
-    // Store recording metadata in localStorage
-    storeRecording(recording);
-    
-    return recording;
-  } catch (error) {
-    console.error("Error processing recording:", error);
-    throw error;
-  }
-}
-
-// Function to get a recording by ID
-export async function getRecording(id: string): Promise<Recording | null> {
-  // Simulate API call delay
-  await new Promise(resolve => setTimeout(resolve, 500));
-  
-  try {
-    const recordingJson = localStorage.getItem(`${STORAGE_KEYS.RECORDING_PREFIX}${id}`);
-    if (!recordingJson) {
-      return null;
-    }
-    
-    // The recording already contains the URL, no need to fetch separately
-    return JSON.parse(recordingJson) as Recording;
-  } catch (error) {
-    console.error("Error getting recording:", error);
-    return null;
-  }
+  // Generate a mock recording response
+  return {
+    id: Math.random().toString(36).substring(2, 15),
+    title: file.name.split(".")[0] || "Untitled Recording",
+    date: new Date().toISOString(),
+    duration: 45, // Assuming 45 seconds for all recordings
+    videoUrl: URL.createObjectURL(file),
+    audioUrl: URL.createObjectURL(file),
+  };
 }
 
 // Mock function to transcribe audio
@@ -272,77 +116,55 @@ export async function getUserRecordings(): Promise<Recording[]> {
   // Simulate API call delay
   await new Promise(resolve => setTimeout(resolve, 1000));
   
-  try {
-    // Get recording IDs from localStorage
-    const recordingsJson = localStorage.getItem(STORAGE_KEYS.RECORDINGS);
-    if (!recordingsJson) {
-      // Return mock recordings if no recordings in localStorage
-      return [
-        {
-          id: "rec123",
-          title: "AI Presentation",
-          date: "2023-09-15T14:30:00Z",
-          duration: 45,
-          analysis: {
-            fillerWordCount: 4,
-            fillerWords: [{ word: "um", count: 2 }, { word: "like", count: 1 }, { word: "you know", count: 1 }],
-            paceWpm: 125,
-            paceRating: "Good",
-            grammarIssues: [{ text: "like, you know,", suggestion: "such as", position: [91, 103] }],
-            confidenceScore: 82,
-            overallScore: 80,
-            feedback: "Your speech was well-structured with a clear introduction, body, and conclusion. Try to minimize filler words like 'um' and 'you know'."
-          }
-        },
-        {
-          id: "rec456",
-          title: "Team Meeting Introduction",
-          date: "2023-09-10T09:15:00Z",
-          duration: 30,
-          analysis: {
-            fillerWordCount: 2,
-            fillerWords: [{ word: "um", count: 1 }, { word: "so", count: 1 }],
-            paceWpm: 110,
-            paceRating: "Good",
-            grammarIssues: [],
-            confidenceScore: 88,
-            overallScore: 85,
-            feedback: "Great job on your team introduction! Your pace was appropriate and you maintained good clarity throughout."
-          }
-        },
-        {
-          id: "rec789",
-          title: "Product Pitch",
-          date: "2023-09-05T16:45:00Z",
-          duration: 60,
-          analysis: {
-            fillerWordCount: 8,
-            fillerWords: [{ word: "um", count: 3 }, { word: "like", count: 2 }, { word: "actually", count: 3 }],
-            paceWpm: 145,
-            paceRating: "Fast",
-            grammarIssues: [{ text: "me and my team", suggestion: "my team and I", position: [45, 58] }],
-            confidenceScore: 75,
-            overallScore: 70,
-            feedback: "Your product pitch contained valuable information, but was delivered too quickly. Try to slow down and reduce filler words to improve clarity."
-          }
-        }
-      ];
-    }
-    
-    // Get recordings from localStorage
-    const recordingIds: string[] = JSON.parse(recordingsJson);
-    const recordings: Recording[] = [];
-    
-    for (const id of recordingIds) {
-      const recordingJson = localStorage.getItem(`${STORAGE_KEYS.RECORDING_PREFIX}${id}`);
-      if (recordingJson) {
-        recordings.push(JSON.parse(recordingJson) as Recording);
+  // Return mock recordings data
+  return [
+    {
+      id: "rec123",
+      title: "AI Presentation",
+      date: "2023-09-15T14:30:00Z",
+      duration: 45,
+      analysis: {
+        fillerWordCount: 4,
+        fillerWords: [{ word: "um", count: 2 }, { word: "like", count: 1 }, { word: "you know", count: 1 }],
+        paceWpm: 125,
+        paceRating: "Good",
+        grammarIssues: [{ text: "like, you know,", suggestion: "such as", position: [91, 103] }],
+        confidenceScore: 82,
+        overallScore: 80,
+        feedback: "Your speech was well-structured with a clear introduction, body, and conclusion. Try to minimize filler words like 'um' and 'you know'."
+      }
+    },
+    {
+      id: "rec456",
+      title: "Team Meeting Introduction",
+      date: "2023-09-10T09:15:00Z",
+      duration: 30,
+      analysis: {
+        fillerWordCount: 2,
+        fillerWords: [{ word: "um", count: 1 }, { word: "so", count: 1 }],
+        paceWpm: 110,
+        paceRating: "Good",
+        grammarIssues: [],
+        confidenceScore: 88,
+        overallScore: 85,
+        feedback: "Great job on your team introduction! Your pace was appropriate and you maintained good clarity throughout."
+      }
+    },
+    {
+      id: "rec789",
+      title: "Product Pitch",
+      date: "2023-09-05T16:45:00Z",
+      duration: 60,
+      analysis: {
+        fillerWordCount: 8,
+        fillerWords: [{ word: "um", count: 3 }, { word: "like", count: 2 }, { word: "actually", count: 3 }],
+        paceWpm: 145,
+        paceRating: "Fast",
+        grammarIssues: [{ text: "me and my team", suggestion: "my team and I", position: [45, 58] }],
+        confidenceScore: 75,
+        overallScore: 70,
+        feedback: "Your product pitch contained valuable information, but was delivered too quickly. Try to slow down and reduce filler words to improve clarity."
       }
     }
-    
-    return recordings;
-  } catch (error) {
-    console.error("Error getting recordings:", error);
-    return [];
-  }
+  ];
 }
