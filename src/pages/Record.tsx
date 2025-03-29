@@ -1,0 +1,354 @@
+
+import { useState, useRef, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
+import { Play, Pause, RefreshCw, StopCircle, Clock, MicOff, Mic } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent } from "@/components/ui/card";
+import { Progress } from "@/components/ui/progress";
+import { useToast } from "@/components/ui/use-toast";
+import { processRecording } from "@/services/api";
+
+export default function Record() {
+  const navigate = useNavigate();
+  const { toast } = useToast();
+  const [permission, setPermission] = useState<boolean>(false);
+  const [recording, setRecording] = useState<boolean>(false);
+  const [paused, setPaused] = useState<boolean>(false);
+  const [elapsedTime, setElapsedTime] = useState<number>(0);
+  const [videoBlob, setVideoBlob] = useState<Blob | null>(null);
+  const [isProcessing, setIsProcessing] = useState<boolean>(false);
+  const videoRef = useRef<HTMLVideoElement | null>(null);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const chunksRef = useRef<BlobPart[]>([]);
+  const timerIntervalRef = useRef<number | null>(null);
+
+  const MAX_DURATION = 45; // 45 seconds
+
+  // Request camera and microphone permissions
+  useEffect(() => {
+    const requestPermissions = async () => {
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({
+          video: true,
+          audio: true,
+        });
+        
+        if (videoRef.current) {
+          videoRef.current.srcObject = stream;
+        }
+        
+        setPermission(true);
+      } catch (err) {
+        console.error("Error accessing media devices:", err);
+        setPermission(false);
+        toast({
+          title: "Permission Denied",
+          description: "Please allow camera and microphone access to record your speech.",
+          variant: "destructive",
+        });
+      }
+    };
+    
+    requestPermissions();
+    
+    // Clean up function
+    return () => {
+      // Stop all media tracks
+      if (videoRef.current && videoRef.current.srcObject) {
+        const stream = videoRef.current.srcObject as MediaStream;
+        stream.getTracks().forEach(track => track.stop());
+      }
+      
+      // Clear timer if active
+      if (timerIntervalRef.current) {
+        clearInterval(timerIntervalRef.current);
+      }
+    };
+  }, [toast]);
+
+  const startTimer = () => {
+    if (timerIntervalRef.current) {
+      clearInterval(timerIntervalRef.current);
+    }
+    
+    timerIntervalRef.current = window.setInterval(() => {
+      setElapsedTime(prev => {
+        if (prev >= MAX_DURATION) {
+          stopRecording();
+          return MAX_DURATION;
+        }
+        return prev + 1;
+      });
+    }, 1000);
+  };
+
+  const stopTimer = () => {
+    if (timerIntervalRef.current) {
+      clearInterval(timerIntervalRef.current);
+      timerIntervalRef.current = null;
+    }
+  };
+
+  const startRecording = () => {
+    if (!permission) {
+      toast({
+        title: "Permission Required",
+        description: "Camera and microphone permissions are required to record.",
+        variant: "destructive",
+      });
+      return;
+    }
+    
+    // Reset variables
+    chunksRef.current = [];
+    setElapsedTime(0);
+    
+    // Get media stream
+    const stream = videoRef.current?.srcObject as MediaStream;
+    if (!stream) return;
+    
+    // Create MediaRecorder
+    const mediaRecorder = new MediaRecorder(stream);
+    mediaRecorderRef.current = mediaRecorder;
+    
+    // Handle data available event
+    mediaRecorder.ondataavailable = (e) => {
+      if (e.data.size > 0) {
+        chunksRef.current.push(e.data);
+      }
+    };
+    
+    // Handle recording stopped
+    mediaRecorder.onstop = () => {
+      const blob = new Blob(chunksRef.current, { type: 'video/webm' });
+      setVideoBlob(blob);
+      stopTimer();
+      setRecording(false);
+      setPaused(false);
+    };
+    
+    // Start recording
+    mediaRecorder.start();
+    startTimer();
+    setRecording(true);
+    setPaused(false);
+  };
+
+  const pauseRecording = () => {
+    if (mediaRecorderRef.current && recording && !paused) {
+      mediaRecorderRef.current.pause();
+      stopTimer();
+      setPaused(true);
+    }
+  };
+
+  const resumeRecording = () => {
+    if (mediaRecorderRef.current && recording && paused) {
+      mediaRecorderRef.current.resume();
+      startTimer();
+      setPaused(false);
+    }
+  };
+
+  const stopRecording = () => {
+    if (mediaRecorderRef.current && recording) {
+      mediaRecorderRef.current.stop();
+      stopTimer();
+    }
+  };
+
+  const resetRecording = () => {
+    setVideoBlob(null);
+    setElapsedTime(0);
+  };
+
+  const handleProcess = async () => {
+    if (!videoBlob) {
+      toast({
+        title: "No recording available",
+        description: "Please record your speech before processing.",
+        variant: "destructive",
+      });
+      return;
+    }
+    
+    setIsProcessing(true);
+    
+    try {
+      // Convert Blob to File
+      const videoFile = new File([videoBlob], "recording.webm", { type: "video/webm" });
+      
+      // Process the recording
+      const recording = await processRecording(videoFile);
+      
+      toast({
+        title: "Recording processed",
+        description: "Your speech has been processed successfully!",
+      });
+      
+      // Navigate to analysis page
+      navigate(`/analysis/${recording.id}`);
+    } catch (error) {
+      console.error("Error processing recording:", error);
+      toast({
+        title: "Processing Failed",
+        description: "Failed to process your recording. Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
+  const formatTime = (seconds: number) => {
+    const mins = Math.floor(seconds / 60);
+    const secs = seconds % 60;
+    return `${mins}:${secs.toString().padStart(2, '0')}`;
+  };
+
+  return (
+    <div className="container mx-auto px-4 py-8 max-w-4xl">
+      <div className="mb-8">
+        <h1 className="text-3xl font-bold text-primary mb-2">Record Your Speech</h1>
+        <p className="text-muted-foreground">
+          Record yourself for up to 45 seconds. Try to maintain eye contact with the camera.
+        </p>
+      </div>
+      
+      <Card className="mb-8">
+        <CardContent className="p-6 flex flex-col items-center">
+          {/* Video Preview */}
+          <div className="relative w-full aspect-video bg-black rounded-lg overflow-hidden mb-6">
+            {!permission && (
+              <div className="absolute inset-0 flex flex-col items-center justify-center text-white bg-black/90">
+                <MicOff className="h-16 w-16 mb-4" />
+                <p className="text-center max-w-md">
+                  Camera and microphone access is required to record your speech.
+                </p>
+                <Button 
+                  variant="outline" 
+                  className="mt-4 bg-primary/80 hover:bg-primary text-white hover:text-white"
+                  onClick={() => window.location.reload()}
+                >
+                  Grant Permissions
+                </Button>
+              </div>
+            )}
+            
+            <video 
+              ref={videoRef} 
+              autoPlay 
+              muted={!recording} 
+              playsInline 
+              className="w-full h-full object-cover"
+            />
+            
+            {videoBlob && !recording && (
+              <div className="absolute inset-0 flex items-center justify-center bg-black/50">
+                <Button
+                  variant="outline"
+                  className="bg-primary/80 hover:bg-primary text-white hover:text-white"
+                  onClick={() => {
+                    if (videoRef.current) {
+                      videoRef.current.src = URL.createObjectURL(videoBlob);
+                      videoRef.current.muted = false;
+                      videoRef.current.play();
+                    }
+                  }}
+                >
+                  <Play className="h-6 w-6 mr-2" /> Play Recording
+                </Button>
+              </div>
+            )}
+          </div>
+          
+          {/* Timer and Progress */}
+          <div className="w-full mb-6">
+            <div className="flex justify-between mb-2">
+              <div className="flex items-center">
+                <Clock className="h-4 w-4 mr-1 text-muted-foreground" />
+                <span>{formatTime(elapsedTime)} / {formatTime(MAX_DURATION)}</span>
+              </div>
+              <span className="text-muted-foreground">
+                {Math.round((elapsedTime / MAX_DURATION) * 100)}%
+              </span>
+            </div>
+            <Progress value={(elapsedTime / MAX_DURATION) * 100} className="h-2" />
+          </div>
+          
+          {/* Recording Controls */}
+          <div className="flex flex-wrap gap-4 justify-center">
+            {!recording && !videoBlob && (
+              <Button 
+                onClick={startRecording} 
+                disabled={!permission || isProcessing}
+                size="lg"
+                className="gap-2"
+              >
+                <Mic className="h-5 w-5" /> Start Recording
+              </Button>
+            )}
+            
+            {recording && !paused && (
+              <>
+                <Button onClick={pauseRecording} variant="outline" size="lg" className="gap-2">
+                  <Pause className="h-5 w-5" /> Pause
+                </Button>
+                <Button onClick={stopRecording} variant="destructive" size="lg" className="gap-2">
+                  <StopCircle className="h-5 w-5" /> Stop
+                </Button>
+              </>
+            )}
+            
+            {recording && paused && (
+              <>
+                <Button onClick={resumeRecording} variant="outline" size="lg" className="gap-2">
+                  <Play className="h-5 w-5" /> Resume
+                </Button>
+                <Button onClick={stopRecording} variant="destructive" size="lg" className="gap-2">
+                  <StopCircle className="h-5 w-5" /> Stop
+                </Button>
+              </>
+            )}
+            
+            {videoBlob && !recording && (
+              <>
+                <Button onClick={resetRecording} variant="outline" size="lg" className="gap-2">
+                  <RefreshCw className="h-5 w-5" /> Record Again
+                </Button>
+                <Button 
+                  onClick={handleProcess} 
+                  disabled={isProcessing}
+                  size="lg"
+                  className="gap-2"
+                >
+                  {isProcessing ? (
+                    <>
+                      <div className="h-5 w-5 border-2 border-t-transparent rounded-full animate-spin mr-2"></div>
+                      Processing...
+                    </>
+                  ) : (
+                    <>
+                      Process Recording
+                    </>
+                  )}
+                </Button>
+              </>
+            )}
+          </div>
+        </CardContent>
+      </Card>
+      
+      <div className="bg-secondary/20 p-6 rounded-lg text-center">
+        <h3 className="text-lg font-medium mb-2">Recording Tips</h3>
+        <ul className="text-sm text-muted-foreground list-disc list-inside text-left max-w-xl mx-auto space-y-1">
+          <li>Speak clearly and at a moderate pace</li>
+          <li>Position your camera at eye level</li>
+          <li>Ensure good lighting on your face</li>
+          <li>Minimize background noise and distractions</li>
+          <li>Practice good posture and maintain eye contact</li>
+        </ul>
+      </div>
+    </div>
+  );
+}
