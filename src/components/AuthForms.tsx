@@ -1,5 +1,5 @@
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, forwardRef } from 'react'
 import { useAuth } from '@/contexts/AuthContext'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -24,7 +24,7 @@ const otpSchema = z.object({
 
 type OtpFormValues = z.infer<typeof otpSchema>
 
-export function AuthForms() {
+export const AuthForms = forwardRef<HTMLDivElement, {}>((props, ref) => {
   const [isLoading, setIsLoading] = useState(false)
   const [email, setEmail] = useState('')
   const [isEmailSent, setIsEmailSent] = useState(false)
@@ -121,7 +121,7 @@ export function AuthForms() {
   }
 
   return (
-    <Card className="w-full max-w-md mx-auto">
+    <Card className="w-full max-w-md mx-auto" ref={ref}>
       <CardHeader>
         <CardTitle>Sign in to Digital Toastmasters</CardTitle>
         <CardDescription>
@@ -160,4 +160,7 @@ export function AuthForms() {
       </form>
     </Card>
   )
-}
+})
+
+// For backwards compatibility
+export { AuthForms as AuthForms }

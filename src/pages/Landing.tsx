@@ -1,13 +1,15 @@
 
 import { AuthForms } from "@/components/AuthForms";
 import { useAuth } from "@/contexts/AuthContext";
-import { useNavigate } from "react-router-dom";
-import { useEffect } from "react";
+import { useNavigate, useLocation } from "react-router-dom";
+import { useEffect, useRef } from "react";
 import { Mic, BarChart, Brain } from "lucide-react";
 
 export default function Landing() {
   const { user } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
+  const authFormRef = useRef<HTMLDivElement>(null);
 
   // Redirect to dashboard if already logged in
   useEffect(() => {
@@ -15,6 +17,25 @@ export default function Landing() {
       navigate("/dashboard");
     }
   }, [user, navigate]);
+
+  // Handle focus on auth form when specified in location state
+  useEffect(() => {
+    if (location.state?.focusAuthForm && authFormRef.current) {
+      // Scroll to the auth form with smooth behavior
+      authFormRef.current.scrollIntoView({ 
+        behavior: 'smooth',
+        block: 'center'
+      });
+      
+      // Focus on the first input in the form
+      setTimeout(() => {
+        const firstInput = authFormRef.current?.querySelector('input');
+        if (firstInput) {
+          firstInput.focus();
+        }
+      }, 500); // Small delay to ensure scroll completes
+    }
+  }, [location.state]);
 
   return (
     <div className="container mx-auto px-4 py-8 max-w-6xl">
@@ -50,7 +71,7 @@ export default function Landing() {
         </div>
         
         <div className="bg-background rounded-lg border shadow-sm p-6">
-          <AuthForms />
+          <AuthForms ref={authFormRef} />
         </div>
       </div>
     </div>

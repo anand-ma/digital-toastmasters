@@ -21,6 +21,11 @@ export function Navbar() {
     await signOut();
   };
 
+  const handleLoginClick = () => {
+    navigate('/', { state: { focusAuthForm: true } });
+    setIsMenuOpen(false);
+  };
+
   return (
     <nav className="border-b bg-background py-4">
       <div className="container px-4 mx-auto flex justify-between items-center">
@@ -101,9 +106,13 @@ export function Navbar() {
                 </Button>
               </>
             ) : (
-              <Link to="/" className="text-foreground hover:text-primary transition-colors">
+              <Button 
+                variant="outline"
+                className="w-full text-foreground hover:text-primary transition-colors"
+                onClick={handleLoginClick}
+              >
                 Login
-              </Link>
+              </Button>
             )}
           </div>
         </div>
