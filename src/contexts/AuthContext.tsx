@@ -14,6 +14,9 @@ interface AuthContextType {
   signOut: () => Promise<void>
 }
 
+const ADMIN_EMAIL = 'admin@admin.com'
+const ADMIN_USER_ID = 'admin-user-id'
+
 const AuthContext = createContext<AuthContextType | undefined>(undefined)
 
 export function AuthProvider({ children }: { children: ReactNode }) {
@@ -24,7 +27,30 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const { toast } = useToast()
 
   useEffect(() => {
-    // Get initial session
+    // Check for admin login in localStorage
+    const isAdminLoggedIn = localStorage.getItem('adminLoggedIn') === 'true'
+    
+    if (isAdminLoggedIn) {
+      // Create mock admin user and session
+      const mockAdminUser = {
+        id: ADMIN_USER_ID,
+        email: ADMIN_EMAIL,
+        role: 'admin',
+      } as User
+      
+      const mockAdminSession = {
+        user: mockAdminUser,
+        access_token: 'admin-access-token',
+        refresh_token: 'admin-refresh-token',
+      } as Session
+      
+      setUser(mockAdminUser)
+      setSession(mockAdminSession)
+      setLoading(false)
+      return
+    }
+    
+    // Regular Supabase auth flow for non-admin users
     supabase.auth.getSession().then(({ data: { session } }) => {
       setSession(session)
       setUser(session?.user ?? null)
@@ -45,6 +71,38 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   async function signIn(email: string) {
     try {
+      // Special handling for admin login
+      if (email.toLowerCase() === ADMIN_EMAIL.toLowerCase()) {
+        // Create mock admin user and session
+        const mockAdminUser = {
+          id: ADMIN_USER_ID,
+          email: ADMIN_EMAIL,
+          role: 'admin',
+        } as User
+        
+        const mockAdminSession = {
+          user: mockAdminUser,
+          access_token: 'admin-access-token',
+          refresh_token: 'admin-refresh-token',
+        } as Session
+        
+        // Set admin login flag in localStorage
+        localStorage.setItem('adminLoggedIn', 'true')
+        
+        // Update state
+        setUser(mockAdminUser)
+        setSession(mockAdminSession)
+        
+        toast({
+          title: "Admin login successful",
+          description: "You have been logged in as admin",
+        })
+        
+        navigate('/dashboard')
+        return Promise.resolve()
+      }
+      
+      // Standard OTP flow for non-admin users
       const { error } = await supabase.auth.signInWithOtp({ 
         email,
         options: {
@@ -74,6 +132,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   async function verifyOtp(email: string, token: string) {
     try {
+      // Admin is handled in signIn, but adding this check for safety
+      if (email.toLowerCase() === ADMIN_EMAIL.toLowerCase()) {
+        return Promise.resolve()
+      }
+      
       const { data, error } = await supabase.auth.verifyOtp({
         email,
         token,
@@ -103,6 +166,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   async function signOut() {
     try {
+      // Special handling for admin logout
+      if (user?.email === ADMIN_EMAIL) {
+        localStorage.removeItem('adminLoggedIn')
+        setUser(null)
+        setSession(null)
+        toast({
+          title: "Admin logged out",
+          description: "You have been logged out successfully"
+        })
+        navigate('/')
+        return
+      }
+      
+      // Regular logout for other users
       await supabase.auth.signOut()
       toast({
         title: "Logged out",

@@ -1,11 +1,11 @@
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import { useAuth } from '@/contexts/AuthContext'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card'
-import { Loader2, CheckCircle } from 'lucide-react'
+import { Loader2 } from 'lucide-react'
 import { 
   InputOTP, 
   InputOTPGroup, 
@@ -15,6 +15,8 @@ import { Form, FormControl, FormField, FormItem, FormMessage } from '@/component
 import { useForm } from 'react-hook-form'
 import { z } from 'zod'
 import { zodResolver } from '@hookform/resolvers/zod'
+
+const ADMIN_EMAIL = 'admin@admin.com'
 
 const otpSchema = z.object({
   otp: z.string().min(6, "OTP must be 6 digits").max(6)
@@ -38,8 +40,15 @@ export function AuthForms() {
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault()
     setIsLoading(true)
+    
     try {
       await signIn(email)
+      
+      // For admin, we don't need to show OTP screen as login is handled directly
+      if (email.toLowerCase() === ADMIN_EMAIL.toLowerCase()) {
+        return
+      }
+      
       setIsEmailSent(true)
     } finally {
       setIsLoading(false)
@@ -115,7 +124,11 @@ export function AuthForms() {
     <Card className="w-full max-w-md mx-auto">
       <CardHeader>
         <CardTitle>Sign in to Digital Toastmasters</CardTitle>
-        <CardDescription>Enter your email to receive a verification code</CardDescription>
+        <CardDescription>
+          {email.toLowerCase() === ADMIN_EMAIL.toLowerCase()
+            ? "Enter admin email to login directly"
+            : "Enter your email to receive a verification code"}
+        </CardDescription>
       </CardHeader>
       <form onSubmit={handleLogin}>
         <CardContent className="space-y-4">
@@ -129,12 +142,19 @@ export function AuthForms() {
               value={email}
               onChange={(e) => setEmail(e.target.value)}
             />
+            {email.toLowerCase() === ADMIN_EMAIL.toLowerCase() && (
+              <p className="text-xs text-muted-foreground mt-1">
+                Admin login: No verification code required
+              </p>
+            )}
           </div>
         </CardContent>
         <CardFooter>
           <Button className="w-full" type="submit" disabled={isLoading}>
             {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-            Send verification code
+            {email.toLowerCase() === ADMIN_EMAIL.toLowerCase()
+              ? "Login as Admin"
+              : "Send verification code"}
           </Button>
         </CardFooter>
       </form>
