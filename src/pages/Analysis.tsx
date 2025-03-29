@@ -1,6 +1,5 @@
-
 import { useState, useEffect } from "react";
-import { useParams } from "react-router-dom";
+import { useParams, useLocation } from "react-router-dom";
 import { 
   Play, 
   Pause, 
@@ -34,9 +33,11 @@ import {
   AccordionItem,
   AccordionTrigger,
 } from "@/components/ui/accordion";
+import { ElevenLabsClient } from 'elevenlabs';
 
 export default function Analysis() {
   const { id } = useParams<{ id: string }>();
+  const location = useLocation();
   const { toast } = useToast();
   
   const [recording, setRecording] = useState<Recording | null>(null);
@@ -51,43 +52,136 @@ export default function Analysis() {
   const [isTranscribing, setIsTranscribing] = useState<boolean>(false);
   const [isAnalyzing, setIsAnalyzing] = useState<boolean>(false);
   
-  // Mock loading the recording
+  const [originalFile, setOriginalFile] = useState<File | null>(null);
+  
+  // Add this state to store the recording data
+  const [recordingData, setRecordingData] = useState<any>(null);
+  
+  // Update the initial useEffect to get recording data
   useEffect(() => {
-    const fetchRecording = async () => {
+    const fetchRecordingData = async () => {
       try {
-        // Mock API call to get recording by ID
-        // In a real app, this would be an actual API call
-        const mockRecording: Recording = {
-          id: id || "rec123",
-          title: "AI Presentation",
-          date: new Date().toISOString(),
-          duration: 45,
-          videoUrl: "https://www.sample-videos.com/video321/mp4/480/big_buck_bunny_480p_1mb.mp4", // Example URL
-          audioUrl: "https://www.sample-videos.com/video321/mp4/480/big_buck_bunny_480p_1mb.mp4", // Example URL
-        };
+        // Try to get data from localStorage first
+        const storedData = localStorage.getItem('recordingData');
+        let data;
         
-        setRecording(mockRecording);
+        if (storedData) {
+          data = JSON.parse(storedData);
+        } else if (location.state) {
+          // Fallback to location state if localStorage is empty
+          data = location.state;
+          // Store it in localStorage for future use
+          localStorage.setItem('recordingData', JSON.stringify(data));
+        }
+
+        if (data) {
+          setRecordingData(data);
+          // Set the recording with the data
+          setRecording({
+            id: data.id,
+            title: data.fileName,
+            date: new Date().toISOString(),
+            duration: 0, // You might want to calculate this
+            videoUrl: data.blobUrl,
+            audioUrl: data.blobUrl
+          });
+        } else {
+          throw new Error('No recording data found');
+        }
       } catch (error) {
-        console.error("Error fetching recording:", error);
+        console.error("Error fetching recording data:", error);
         toast({
           title: "Error loading recording",
-          description: "Failed to load the recording. Please try again.",
+          description: "Failed to load the recording data. Please try uploading again.",
           variant: "destructive",
         });
       }
     };
-    
-    fetchRecording();
-  }, [id, toast]);
+
+    fetchRecordingData();
+  }, [id, location.state, toast]);
+  
+  // Add cleanup for preview URL when component unmounts
+  useEffect(() => {
+    return () => {
+      const storedData = localStorage.getItem('recordingData');
+      if (storedData) {
+        const { previewUrl } = JSON.parse(storedData);
+        if (previewUrl) {
+          URL.revokeObjectURL(previewUrl);
+        }
+      }
+    };
+  }, []);
   
   const handleTranscribe = async () => {
-    if (!recording || !recording.id) return;
+    if (!recordingData) {
+      toast({
+        title: "No recording found",
+        description: "Please upload a file first.",
+        variant: "destructive",
+      });
+      return;
+    }
     
     setIsTranscribing(true);
     
     try {
-      const result = await transcribeAudio(recording.id);
-      setTranscript(result);
+      const client = new ElevenLabsClient({
+        apiKey: "sk_b28a30dd43efe6a7c4f107d8a7536d5573e3161c1c2104aa",
+      });
+
+      // Fetch the file from the blob URL
+      const response = await fetch(recordingData.blobUrl);
+      const blob = await response.blob();
+      
+      const audioFile = new File([blob], recordingData.fileName, {
+        type: recordingData.fileType
+      });
+
+      const transcription = await client.speechToText.convert({
+        file: audioFile,
+        model_id: "scribe_v1",
+      });
+
+      // Get the video duration
+      const video = document.createElement('video');
+      video.src = recordingData.blobUrl;
+      await new Promise(resolve => {
+        video.addEventListener('loadedmetadata', resolve);
+      });
+      const duration = Math.floor(video.duration);
+
+      // Create segments for every 10 seconds
+      const segmentLength = 10; // 10 seconds per segment
+      const numberOfSegments = Math.ceil(duration / segmentLength);
+      const wordsArray = transcription.text.split(' ');
+      const wordsPerSegment = Math.ceil(wordsArray.length / numberOfSegments);
+
+      const segments = Array.from({ length: numberOfSegments }, (_, index) => {
+        const start = index * segmentLength;
+        const end = Math.min((index + 1) * segmentLength, duration);
+        
+        // Get words for this segment
+        const startWord = index * wordsPerSegment;
+        const endWord = Math.min((index + 1) * wordsPerSegment, wordsArray.length);
+        const segmentText = wordsArray.slice(startWord, endWord).join(' ');
+
+        return {
+          text: segmentText,
+          start: start,
+          end: end,
+          confidence: 0.9 // Default confidence value
+        };
+      });
+
+      const newTranscript: Transcript = {
+        text: transcription.text,
+        segments: segments
+      };
+
+      setTranscript(newTranscript);
+      
       toast({
         title: "Transcription complete",
         description: "Your speech has been transcribed successfully.",
@@ -96,11 +190,20 @@ export default function Analysis() {
       console.error("Error transcribing audio:", error);
       toast({
         title: "Transcription failed",
-        description: "Failed to transcribe your speech. Please try again.",
+        description: `Failed to transcribe: ${error.message}`,
         variant: "destructive",
       });
     } finally {
       setIsTranscribing(false);
+    }
+  };
+  
+  // Add this function to handle segment click
+  const handleSegmentClick = (startTime: number) => {
+    const videoElement = document.querySelector('video');
+    if (videoElement) {
+      videoElement.currentTime = startTime;
+      videoElement.play();
     }
   };
   
@@ -162,6 +265,15 @@ export default function Analysis() {
     if (score >= 60) return "text-yellow-500";
     return "text-red-500";
   };
+  
+  // Add cleanup for blob URLs
+  useEffect(() => {
+    return () => {
+      if (recordingData?.blobUrl) {
+        URL.revokeObjectURL(recordingData.blobUrl);
+      }
+    };
+  }, [recordingData]);
   
   return (
     <div className="container mx-auto px-4 py-8 max-w-6xl">
@@ -268,18 +380,17 @@ export default function Analysis() {
                                 <div 
                                   key={index} 
                                   className="p-2 rounded border hover:bg-muted/30 transition-colors cursor-pointer"
-                                  // In a real implementation, this would jump to that segment in the video
-                                  // onClick={() => setCurrentTime(segment.start)}
+                                  onClick={() => handleSegmentClick(segment.start)}
                                 >
                                   <div className="flex justify-between text-sm mb-1">
                                     <span className="text-muted-foreground">
                                       {formatTime(segment.start)} - {formatTime(segment.end)}
                                     </span>
                                     <span className="text-xs bg-primary/10 rounded-full px-2 py-0.5">
-                                      {(segment.confidence * 100).toFixed(0)}% confidence
+                                      {Math.round(segment.confidence * 100)}% confidence
                                     </span>
                                   </div>
-                                  <p>{segment.text}</p>
+                                  <p className="text-sm">{segment.text}</p>
                                 </div>
                               ))}
                             </div>

@@ -1,5 +1,4 @@
-
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { Upload as UploadIcon, X, FileVideo, FileAudio } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -15,6 +14,7 @@ export default function Upload() {
   const [isDragging, setIsDragging] = useState<boolean>(false);
   const [uploadProgress, setUploadProgress] = useState<number>(0);
   const [isProcessing, setIsProcessing] = useState<boolean>(false);
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   
   const allowedFileTypes = [
     "video/mp4",
@@ -72,11 +72,21 @@ export default function Upload() {
     }
     
     setFile(file);
+    
+    // Create preview URL for video files
+    if (file.type.startsWith('video/')) {
+      const url = URL.createObjectURL(file);
+      setPreviewUrl(url);
+    }
   };
   
   const removeFile = () => {
     setFile(null);
     setUploadProgress(0);
+    if (previewUrl) {
+      URL.revokeObjectURL(previewUrl);
+      setPreviewUrl(null);
+    }
     if (fileInputRef.current) {
       fileInputRef.current.value = "";
     }
@@ -94,7 +104,6 @@ export default function Upload() {
     
     setIsProcessing(true);
     
-    // Simulate upload progress
     const progressInterval = setInterval(() => {
       setUploadProgress(prev => {
         const newProgress = prev + 5;
@@ -107,10 +116,26 @@ export default function Upload() {
     }, 200);
     
     try {
-      // Process the recording
       const recording = await processRecording(file);
       
-      // Clear the interval if it's still running
+      // Create a new blob from the file
+      const fileBlob = new Blob([file], { type: file.type });
+      const blobUrl = URL.createObjectURL(fileBlob);
+
+      // Store all necessary data
+      const recordingData = {
+        id: recording.id,
+        fileName: file.name,
+        fileType: file.type,
+        fileSize: file.size,
+        blobUrl: blobUrl,
+        // If you have a preview URL for video, include it
+        previewUrl: file.type.startsWith('video/') ? blobUrl : null
+      };
+
+      // Store in localStorage
+      localStorage.setItem('recordingData', JSON.stringify(recordingData));
+      
       clearInterval(progressInterval);
       setUploadProgress(100);
       
@@ -119,8 +144,10 @@ export default function Upload() {
         description: "Your file has been processed successfully!",
       });
       
-      // Navigate to analysis page
-      navigate(`/analysis/${recording.id}`);
+      // Navigate with state as backup
+      navigate(`/analysis/${recording.id}`, {
+        state: recordingData
+      });
     } catch (error) {
       console.error("Error processing upload:", error);
       clearInterval(progressInterval);
@@ -133,6 +160,16 @@ export default function Upload() {
       setIsProcessing(false);
     }
   };
+  
+  // Add cleanup on component unmount
+  useEffect(() => {
+    return () => {
+      // Cleanup preview URL when component unmounts
+      if (previewUrl) {
+        URL.revokeObjectURL(previewUrl);
+      }
+    };
+  }, [previewUrl]);
   
   return (
     <div className="container mx-auto px-4 py-8 max-w-4xl">
@@ -176,18 +213,24 @@ export default function Upload() {
       ) : (
         <div className="border rounded-lg p-8 shadow-sm">
           <div className="flex items-center justify-between mb-6">
-            <div className="flex items-center">
-              {file.type.startsWith("video") ? (
-                <FileVideo className="h-10 w-10 text-primary mr-4" />
+            <div className="flex-1">
+              {file.type.startsWith('video') && previewUrl ? (
+                <video 
+                  className="w-full max-h-[400px] rounded-lg mb-4" 
+                  src={previewUrl} 
+                  controls
+                />
               ) : (
-                <FileAudio className="h-10 w-10 text-primary mr-4" />
+                <div className="flex items-center">
+                  <FileAudio className="h-10 w-10 text-primary mr-4" />
+                  <div>
+                    <p className="font-medium">{file.name}</p>
+                    <p className="text-sm text-muted-foreground">
+                      {(file.size / 1024 / 1024).toFixed(2)} MB · {file.type}
+                    </p>
+                  </div>
+                </div>
               )}
-              <div>
-                <p className="font-medium">{file.name}</p>
-                <p className="text-sm text-muted-foreground">
-                  {(file.size / 1024 / 1024).toFixed(2)} MB · {file.type}
-                </p>
-              </div>
             </div>
             <Button
               variant="ghost"
