@@ -1,4 +1,3 @@
-
 // Mock data and API service interfaces
 
 // Speech analysis result type
@@ -48,56 +47,49 @@ export interface Recording {
 // LocalStorage keys
 const STORAGE_KEYS = {
   RECORDINGS: "recordings",
-  RECORDING_PREFIX: "recording_",
-  MEDIA_PREFIX: "media_"
+  RECORDING_PREFIX: "recording_"
 };
 
-// Store recording media in localStorage - with file size handling
-const storeMediaInLocalStorage = async (id: string, file: File): Promise<string> => {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.readAsDataURL(file);
-    reader.onload = () => {
-      try {
-        // Instead of storing the full media in localStorage, we'll store a reference
-        // and only keep metadata in localStorage
-        const dataUrl = reader.result as string;
-        
-        // Create a recording reference with only metadata
-        const mediaMetadata = {
-          type: file.type,
-          size: file.size,
-          name: file.name,
-          lastModified: file.lastModified,
-          dataUrl // Store the actual data URL in the metadata
-        };
-        
-        localStorage.setItem(`${STORAGE_KEYS.MEDIA_PREFIX}${id}`, JSON.stringify(mediaMetadata));
-        
-        // Return the dataURL for immediate use without storing it separately
-        resolve(dataUrl);
-      } catch (error) {
-        console.error("Error storing media metadata in localStorage:", error);
-        reject(error);
-      }
-    };
-    reader.onerror = (error) => {
-      console.error("Error reading file:", error);
-      reject(error);
-    };
-  });
-};
+import { supabase } from "@/integrations/supabase/client";
 
-// Get recording media reference from localStorage
-export const getMediaFromLocalStorage = (id: string): string | null => {
+// Store media file in Supabase Storage
+const storeMediaInSupabase = async (id: string, file: File): Promise<string> => {
   try {
-    const mediaMetadataJson = localStorage.getItem(`${STORAGE_KEYS.MEDIA_PREFIX}${id}`);
-    if (!mediaMetadataJson) return null;
+    const fileExt = file.name.split('.').pop();
+    const filePath = `${id}.${fileExt}`;
     
-    const mediaMetadata = JSON.parse(mediaMetadataJson);
-    return mediaMetadata.dataUrl || null;
+    // Upload file to 'recordings' bucket
+    const { data, error } = await supabase.storage
+      .from('recordings')
+      .upload(filePath, file, {
+        cacheControl: '3600',
+        upsert: true
+      });
+      
+    if (error) {
+      console.error('Error uploading to Supabase:', error);
+      throw error;
+    }
+    
+    // Get public URL
+    const { data: { publicUrl } } = supabase.storage
+      .from('recordings')
+      .getPublicUrl(filePath);
+      
+    return publicUrl;
   } catch (error) {
-    console.error("Error retrieving media from localStorage:", error);
+    console.error('Error storing media in Supabase Storage:', error);
+    throw error;
+  }
+};
+
+// Get media URL from Supabase
+export const getMediaFromSupabase = (url: string): string | null => {
+  try {
+    // Just return the URL as is - no need to fetch anything
+    return url;
+  } catch (error) {
+    console.error('Error retrieving media URL:', error);
     return null;
   }
 };
@@ -135,28 +127,22 @@ export async function processRecording(file: File): Promise<Recording> {
   const isVideo = file.type.startsWith('video');
   
   try {
-    // Store media reference and get dataURL for immediate use
-    const dataUrl = await storeMediaInLocalStorage(id, file);
+    // Upload file to Supabase storage and get URL
+    const mediaUrl = await storeMediaInSupabase(id, file);
     
-    // Create recording object with references but not actual media content
+    // Create recording object with references
     const recording: Recording = {
       id,
       title: file.name.split(".")[0] || "Untitled Recording",
       date: new Date().toISOString(),
       duration: 45, // We'll assume 45 seconds for now
       isVideo,
-      // We're not storing the actual URLs in the recording object anymore
+      // Set the appropriate URL
+      ...(isVideo ? { videoUrl: mediaUrl } : { audioUrl: mediaUrl })
     };
     
     // Store recording metadata in localStorage
     storeRecording(recording);
-    
-    // Add the URLs to the returned object for immediate use
-    if (isVideo) {
-      recording.videoUrl = dataUrl;
-    } else {
-      recording.audioUrl = dataUrl;
-    }
     
     return recording;
   } catch (error) {
@@ -165,7 +151,7 @@ export async function processRecording(file: File): Promise<Recording> {
   }
 }
 
-// Function to get a recording by ID, with media handling
+// Function to get a recording by ID
 export async function getRecording(id: string): Promise<Recording | null> {
   // Simulate API call delay
   await new Promise(resolve => setTimeout(resolve, 500));
@@ -176,19 +162,8 @@ export async function getRecording(id: string): Promise<Recording | null> {
       return null;
     }
     
-    const recording = JSON.parse(recordingJson) as Recording;
-    
-    // Try to get the media URL from localStorage
-    const mediaUrl = getMediaFromLocalStorage(id);
-    if (mediaUrl) {
-      if (recording.isVideo) {
-        recording.videoUrl = mediaUrl;
-      } else {
-        recording.audioUrl = mediaUrl;
-      }
-    }
-    
-    return recording;
+    // The recording already contains the URL, no need to fetch separately
+    return JSON.parse(recordingJson) as Recording;
   } catch (error) {
     console.error("Error getting recording:", error);
     return null;

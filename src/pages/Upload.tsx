@@ -1,4 +1,3 @@
-
 import { useState, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { Upload as UploadIcon, X, FileVideo, FileAudio, AlertCircle } from "lucide-react";
@@ -103,14 +102,15 @@ export default function Upload() {
     }
     
     setIsProcessing(true);
+    setUploadProgress(0);
     
     // Simulate upload progress
     const progressInterval = setInterval(() => {
       setUploadProgress(prev => {
         const newProgress = prev + 5;
-        if (newProgress >= 100) {
+        if (newProgress >= 95) {
           clearInterval(progressInterval);
-          return 100;
+          return 95;
         }
         return newProgress;
       });
@@ -137,10 +137,6 @@ export default function Upload() {
       
       // More specific error message based on the error type
       let errorMessage = "Failed to process your file. Please try again.";
-      
-      if (error.name === "QuotaExceededError") {
-        errorMessage = "Storage limit exceeded. Try using a smaller file or clearing browser data.";
-      }
       
       toast({
         title: "Upload Failed",
