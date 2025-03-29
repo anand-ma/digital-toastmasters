@@ -11,6 +11,7 @@ import Record from "@/pages/Record";
 import Upload from "@/pages/Upload";
 import Analysis from "@/pages/Analysis";
 import Profile from "@/pages/Profile";
+import History from "@/pages/History";
 import NotFound from "./pages/NotFound";
 import { AuthProvider } from "@/contexts/AuthContext";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
@@ -40,6 +41,11 @@ const App = () => (
               <Route path="/upload" element={
                 <ProtectedRoute>
                   <Upload />
+                </ProtectedRoute>
+              } />
+              <Route path="/history" element={
+                <ProtectedRoute>
+                  <History />
                 </ProtectedRoute>
               } />
               <Route path="/analysis/:id" element={
