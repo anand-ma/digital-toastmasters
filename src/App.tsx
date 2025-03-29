@@ -10,7 +10,10 @@ import Dashboard from "@/pages/Dashboard";
 import Record from "@/pages/Record";
 import Upload from "@/pages/Upload";
 import Analysis from "@/pages/Analysis";
+import Profile from "@/pages/Profile";
 import NotFound from "./pages/NotFound";
+import { AuthProvider } from "@/contexts/AuthContext";
+import { ProtectedRoute } from "@/components/ProtectedRoute";
 
 const queryClient = new QueryClient();
 
@@ -20,16 +23,39 @@ const App = () => (
       <Toaster />
       <Sonner />
       <BrowserRouter>
-        <Layout>
-          <Routes>
-            <Route path="/" element={<Landing />} />
-            <Route path="/dashboard" element={<Dashboard />} />
-            <Route path="/record" element={<Record />} />
-            <Route path="/upload" element={<Upload />} />
-            <Route path="/analysis/:id" element={<Analysis />} />
-            <Route path="*" element={<NotFound />} />
-          </Routes>
-        </Layout>
+        <AuthProvider>
+          <Layout>
+            <Routes>
+              <Route path="/" element={<Landing />} />
+              <Route path="/dashboard" element={
+                <ProtectedRoute>
+                  <Dashboard />
+                </ProtectedRoute>
+              } />
+              <Route path="/record" element={
+                <ProtectedRoute>
+                  <Record />
+                </ProtectedRoute>
+              } />
+              <Route path="/upload" element={
+                <ProtectedRoute>
+                  <Upload />
+                </ProtectedRoute>
+              } />
+              <Route path="/analysis/:id" element={
+                <ProtectedRoute>
+                  <Analysis />
+                </ProtectedRoute>
+              } />
+              <Route path="/profile" element={
+                <ProtectedRoute>
+                  <Profile />
+                </ProtectedRoute>
+              } />
+              <Route path="*" element={<NotFound />} />
+            </Routes>
+          </Layout>
+        </AuthProvider>
       </BrowserRouter>
     </TooltipProvider>
   </QueryClientProvider>

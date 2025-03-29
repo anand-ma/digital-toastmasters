@@ -5,33 +5,20 @@ import { Menu, X, User } from "lucide-react";
 import { ThemeSwitcher } from "@/components/ThemeSwitcher";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/components/ui/use-toast";
+import { useAuth } from "@/contexts/AuthContext";
 
 export function Navbar() {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const navigate = useNavigate();
   const { toast } = useToast();
-  const [isLoggedIn, setIsLoggedIn] = useState(false);
+  const { user, signOut } = useAuth();
 
   const toggleMenu = () => {
     setIsMenuOpen(!isMenuOpen);
   };
 
-  const handleLogin = () => {
-    setIsLoggedIn(true);
-    toast({
-      title: "Logged in successfully",
-      description: "Welcome to Digital Toastmasters!",
-    });
-    navigate("/dashboard");
-  };
-
-  const handleLogout = () => {
-    setIsLoggedIn(false);
-    toast({
-      title: "Logged out",
-      description: "You have been logged out successfully.",
-    });
-    navigate("/");
+  const handleLogout = async () => {
+    await signOut();
   };
 
   return (
@@ -43,7 +30,7 @@ export function Navbar() {
 
         {/* Desktop Menu */}
         <div className="hidden md:flex items-center space-x-4">
-          {isLoggedIn ? (
+          {user ? (
             <>
               <Link to="/dashboard" className="text-foreground hover:text-primary transition-colors">
                 Dashboard
@@ -72,12 +59,6 @@ export function Navbar() {
           ) : (
             <div className="flex items-center ml-4 space-x-2">
               <ThemeSwitcher />
-              <Button
-                variant="default"
-                onClick={handleLogin}
-              >
-                Log in with Google
-              </Button>
             </div>
           )}
         </div>
@@ -100,7 +81,7 @@ export function Navbar() {
       {isMenuOpen && (
         <div className="md:hidden py-4 px-4 bg-background border-b">
           <div className="flex flex-col space-y-4">
-            {isLoggedIn ? (
+            {user ? (
               <>
                 <Link to="/dashboard" className="text-foreground hover:text-primary transition-colors">
                   Dashboard
@@ -120,13 +101,9 @@ export function Navbar() {
                 </Button>
               </>
             ) : (
-              <Button
-                variant="default"
-                onClick={handleLogin}
-                className="w-full"
-              >
-                Log in with Google
-              </Button>
+              <Link to="/" className="text-foreground hover:text-primary transition-colors">
+                Login
+              </Link>
             )}
           </div>
         </div>
