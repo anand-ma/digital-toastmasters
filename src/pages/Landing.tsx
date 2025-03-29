@@ -1,14 +1,19 @@
-
 import { useNavigate } from "react-router-dom";
 import { ArrowRight, Mic, Upload, BarChart } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { useRef } from "react";
 
 export default function Landing() {
   const navigate = useNavigate();
+  const howItWorksRef = useRef<HTMLElement>(null);
 
   const handleGetStarted = () => {
     navigate("/dashboard");
+  };
+
+  const scrollToHowItWorks = () => {
+    howItWorksRef.current?.scrollIntoView({ behavior: "smooth" });
   };
 
   return (
@@ -28,7 +33,7 @@ export default function Landing() {
                 <Button onClick={handleGetStarted} size="lg" className="gap-2">
                   Get Started <ArrowRight className="h-5 w-5" />
                 </Button>
-                <Button variant="outline" size="lg">
+                <Button variant="outline" size="lg" onClick={scrollToHowItWorks}>
                   Learn More
                 </Button>
               </div>
@@ -45,7 +50,7 @@ export default function Landing() {
       </section>
 
       {/* Features Section */}
-      <section className="py-16 bg-secondary/20 px-4">
+      <section ref={howItWorksRef} className="py-16 bg-secondary/20 px-4">
         <div className="container mx-auto max-w-6xl">
           <h2 className="text-3xl font-bold text-center mb-12 text-primary">How It Works</h2>
           <div className="grid md:grid-cols-3 gap-8">
