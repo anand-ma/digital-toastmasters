@@ -10,6 +10,7 @@ interface AuthContextType {
   session: Session | null
   loading: boolean
   signIn: (email: string) => Promise<void>
+  verifyOtp: (email: string, token: string) => Promise<void>
   signOut: () => Promise<void>
 }
 
@@ -47,7 +48,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const { error } = await supabase.auth.signInWithOtp({ 
         email,
         options: {
-          emailRedirectTo: `${window.location.origin}/dashboard`,
+          shouldCreateUser: true,
         }
       })
       
@@ -56,15 +57,47 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       }
       
       toast({
-        title: "Magic link sent",
-        description: "Check your email for the login link",
+        title: "OTP code sent",
+        description: "Check your email for the verification code",
       })
+      
+      return Promise.resolve()
     } catch (error: any) {
       toast({
         title: "Login failed",
         description: error.message || "An error occurred during login",
         variant: "destructive",
       })
+      return Promise.reject(error)
+    }
+  }
+
+  async function verifyOtp(email: string, token: string) {
+    try {
+      const { data, error } = await supabase.auth.verifyOtp({
+        email,
+        token,
+        type: 'email'
+      })
+      
+      if (error) {
+        throw error
+      }
+      
+      toast({
+        title: "Login successful",
+        description: "You have been logged in successfully"
+      })
+      
+      navigate('/dashboard')
+      return Promise.resolve()
+    } catch (error: any) {
+      toast({
+        title: "Verification failed",
+        description: error.message || "Invalid or expired code",
+        variant: "destructive",
+      })
+      return Promise.reject(error)
     }
   }
 
@@ -90,6 +123,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     session,
     loading,
     signIn,
+    verifyOtp,
     signOut,
   }
 
