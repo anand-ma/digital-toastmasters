@@ -1,12 +1,17 @@
-
 import { useState, useRef, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
-import { Play, Pause, RefreshCw, StopCircle, Clock, MicOff, Mic } from "lucide-react";
+import { Play, Pause, RefreshCw, StopCircle, Clock, MicOff, Mic, FileVideo } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { useToast } from "@/components/ui/use-toast";
 import { processRecording } from "@/services/api";
+import { ElevenLabsClient } from 'elevenlabs';
+
+// Initialize the ElevenLabs client outside the component
+const client = new ElevenLabsClient({
+  apiKey: "sk_b28a30dd43efe6a7c4f107d8a7536d5573e3161c1c2104aa",
+});
 
 export default function Record() {
   const navigate = useNavigate();
@@ -17,6 +22,8 @@ export default function Record() {
   const [elapsedTime, setElapsedTime] = useState<number>(0);
   const [videoBlob, setVideoBlob] = useState<Blob | null>(null);
   const [isProcessing, setIsProcessing] = useState<boolean>(false);
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [uploadProgress, setUploadProgress] = useState<number>(0);
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<BlobPart[]>([]);
@@ -107,8 +114,12 @@ export default function Record() {
     const stream = videoRef.current?.srcObject as MediaStream;
     if (!stream) return;
     
-    // Create MediaRecorder
-    const mediaRecorder = new MediaRecorder(stream);
+    // Create MediaRecorder with specific options
+    const mediaRecorder = new MediaRecorder(stream, {
+      mimeType: 'video/webm;codecs=vp8,opus',
+      videoBitsPerSecond: 2500000,
+      audioBitsPerSecond: 128000
+    });
     mediaRecorderRef.current = mediaRecorder;
     
     // Handle data available event
@@ -122,6 +133,9 @@ export default function Record() {
     mediaRecorder.onstop = () => {
       const blob = new Blob(chunksRef.current, { type: 'video/webm' });
       setVideoBlob(blob);
+      // Create and set preview URL
+      const url = URL.createObjectURL(blob);
+      setPreviewUrl(url);
       stopTimer();
       setRecording(false);
       setPaused(false);
@@ -158,6 +172,14 @@ export default function Record() {
   };
 
   const resetRecording = () => {
+    if (videoRef.current && videoRef.current.src) {
+      URL.revokeObjectURL(videoRef.current.src);
+      videoRef.current.src = '';
+    }
+    if (previewUrl) {
+      URL.revokeObjectURL(previewUrl);
+      setPreviewUrl(null);
+    }
     setVideoBlob(null);
     setElapsedTime(0);
   };
@@ -174,31 +196,131 @@ export default function Record() {
     
     setIsProcessing(true);
     
+    const progressInterval = setInterval(() => {
+      setUploadProgress(prev => {
+        const newProgress = prev + 5;
+        if (newProgress >= 100) {
+          clearInterval(progressInterval);
+          return 100;
+        }
+        return newProgress;
+      });
+    }, 200);
+    
     try {
-      // Convert Blob to File
+      // Create a File object from the blob
       const videoFile = new File([videoBlob], "recording.webm", { type: "video/webm" });
       
       // Process the recording
       const recording = await processRecording(videoFile);
-      
-      toast({
-        title: "Recording processed",
-        description: "Your speech has been processed successfully!",
-      });
-      
-      // Navigate to analysis page
-      navigate(`/analysis/${recording.id}`);
+
+      // Convert to audio file for ElevenLabs
+      try {
+        const transcription = await client.speechToText.convert({
+          file: videoFile,
+          model_id: "scribe_v1",
+        });
+
+        console.log("Transcription result:", transcription.text);
+
+        // Create persistent blob URLs
+        const videoBlobUrl = URL.createObjectURL(videoBlob);
+        
+        // Store recording data with transcription
+        const recordingData = {
+          id: recording.id,
+          fileName: "recording.webm",
+          fileType: "video/webm",
+          fileSize: videoFile.size,
+          transcription: transcription.text,
+          isRecorded: true,
+          // Add video preview URLs
+          blobUrl: videoBlobUrl,
+          previewUrl: videoBlobUrl,
+          // Store the video blob itself
+          videoBlob: videoBlob
+        };
+
+        // Store in localStorage (without the blob to avoid size issues)
+        const storageData = {
+          ...recordingData,
+          videoBlob: null // Don't store the blob in localStorage
+        };
+        localStorage.setItem('recordingData', JSON.stringify(storageData));
+        
+        clearInterval(progressInterval);
+        setUploadProgress(100);
+        
+        toast({
+          title: "Recording processed",
+          description: "Your speech has been transcribed successfully!",
+        });
+        
+        // Navigate with complete data including the blob
+        navigate(`/analysis/${recording.id}`, {
+          state: recordingData
+        });
+      } catch (transcriptionError) {
+        console.error("Transcription error:", transcriptionError);
+        throw new Error("Failed to transcribe the recording");
+      }
     } catch (error) {
       console.error("Error processing recording:", error);
+      clearInterval(progressInterval);
       toast({
         title: "Processing Failed",
-        description: "Failed to process your recording. Please try again.",
+        description: error.message || "Failed to process your recording. Please try again.",
         variant: "destructive",
       });
     } finally {
       setIsProcessing(false);
+      setUploadProgress(0);
     }
   };
+
+  // Modify the playRecording function
+  const playRecording = () => {
+    if (videoRef.current && videoBlob) {
+      // Stop current playback and remove existing source
+      videoRef.current.pause();
+      if (videoRef.current.src) {
+        URL.revokeObjectURL(videoRef.current.src);
+      }
+
+      // Create new blob URL
+      const url = URL.createObjectURL(videoBlob);
+      videoRef.current.src = url;
+      videoRef.current.muted = false;
+
+      // Play the video
+      videoRef.current.play().catch(error => {
+        console.error("Error playing video:", error);
+        toast({
+          title: "Playback Error",
+          description: "Failed to play the recording.",
+          variant: "destructive",
+        });
+      });
+
+      // Clean up URL only when switching source or component unmounts
+      videoRef.current.onloadeddata = () => {
+        // Video is loaded and ready to play
+        console.log("Video loaded successfully");
+      };
+    }
+  };
+
+  // Add cleanup for video source in the cleanup effect
+  useEffect(() => {
+    return () => {
+      if (videoRef.current && videoRef.current.src) {
+        URL.revokeObjectURL(videoRef.current.src);
+      }
+      if (previewUrl) {
+        URL.revokeObjectURL(previewUrl);
+      }
+    };
+  }, [previewUrl]);
 
   const formatTime = (seconds: number) => {
     const mins = Math.floor(seconds / 60);
@@ -241,6 +363,14 @@ export default function Record() {
               muted={!recording} 
               playsInline 
               className="w-full h-full object-cover"
+              onError={(e) => {
+                console.error("Video error:", e);
+              }}
+              onEnded={() => {
+                if (videoRef.current) {
+                  videoRef.current.currentTime = 0;
+                }
+              }}
             />
             
             {videoBlob && !recording && (
@@ -248,19 +378,24 @@ export default function Record() {
                 <Button
                   variant="outline"
                   className="bg-primary/80 hover:bg-primary text-white hover:text-white"
-                  onClick={() => {
-                    if (videoRef.current) {
-                      videoRef.current.src = URL.createObjectURL(videoBlob);
-                      videoRef.current.muted = false;
-                      videoRef.current.play();
-                    }
-                  }}
+                  onClick={playRecording}
                 >
                   <Play className="h-6 w-6 mr-2" /> Play Recording
                 </Button>
               </div>
             )}
           </div>
+          
+          {/* Add upload progress bar */}
+          {uploadProgress > 0 && (
+            <div className="w-full mb-6">
+              <div className="flex justify-between mb-2">
+                <span className="text-sm">Processing...</span>
+                <span className="text-sm">{uploadProgress}%</span>
+              </div>
+              <Progress value={uploadProgress} className="h-2" />
+            </div> 
+          )}
           
           {/* Timer and Progress */}
           <div className="w-full mb-6">
@@ -329,7 +464,8 @@ export default function Record() {
                     </>
                   ) : (
                     <>
-                      Process Recording
+                      <FileVideo className="h-5 w-5 mr-2" />
+                      Transcribe Recording
                     </>
                   )}
                 </Button>
