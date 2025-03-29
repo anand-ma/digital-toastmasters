@@ -1,5 +1,5 @@
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useParams } from "react-router-dom";
 import { 
   Play, 
@@ -21,7 +21,7 @@ import { Progress } from "@/components/ui/progress";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/components/ui/use-toast";
 import { 
-  processRecording, 
+  getRecording,
   transcribeAudio, 
   analyzeTranscript,
   type Recording,
@@ -38,6 +38,7 @@ import {
 export default function Analysis() {
   const { id } = useParams<{ id: string }>();
   const { toast } = useToast();
+  const videoRef = useRef<HTMLVideoElement>(null);
   
   const [recording, setRecording] = useState<Recording | null>(null);
   const [transcript, setTranscript] = useState<Transcript | null>(null);
@@ -50,23 +51,42 @@ export default function Analysis() {
   
   const [isTranscribing, setIsTranscribing] = useState<boolean>(false);
   const [isAnalyzing, setIsAnalyzing] = useState<boolean>(false);
+  const [isLoading, setIsLoading] = useState<boolean>(true);
   
-  // Mock loading the recording
+  // Load the recording
   useEffect(() => {
     const fetchRecording = async () => {
+      if (!id) {
+        toast({
+          title: "Error",
+          description: "No recording ID provided.",
+          variant: "destructive",
+        });
+        setIsLoading(false);
+        return;
+      }
+      
       try {
-        // Mock API call to get recording by ID
-        // In a real app, this would be an actual API call
-        const mockRecording: Recording = {
-          id: id || "rec123",
-          title: "AI Presentation",
-          date: new Date().toISOString(),
-          duration: 45,
-          videoUrl: "https://www.sample-videos.com/video321/mp4/480/big_buck_bunny_480p_1mb.mp4", // Example URL
-          audioUrl: "https://www.sample-videos.com/video321/mp4/480/big_buck_bunny_480p_1mb.mp4", // Example URL
-        };
-        
-        setRecording(mockRecording);
+        const result = await getRecording(id);
+        if (result) {
+          setRecording(result);
+          
+          // If there is a transcript, set it
+          if (result.transcript) {
+            setTranscript(result.transcript);
+          }
+          
+          // If there is an analysis, set it
+          if (result.analysis) {
+            setAnalysis(result.analysis);
+          }
+        } else {
+          toast({
+            title: "Recording not found",
+            description: "Could not find the requested recording.",
+            variant: "destructive",
+          });
+        }
       } catch (error) {
         console.error("Error fetching recording:", error);
         toast({
@@ -74,6 +94,8 @@ export default function Analysis() {
           description: "Failed to load the recording. Please try again.",
           variant: "destructive",
         });
+      } finally {
+        setIsLoading(false);
       }
     };
     
@@ -88,6 +110,16 @@ export default function Analysis() {
     try {
       const result = await transcribeAudio(recording.id);
       setTranscript(result);
+      
+      // Update the recording with transcript
+      if (recording) {
+        const updatedRecording = { ...recording, transcript: result };
+        setRecording(updatedRecording);
+        
+        // Update in localStorage (in a real app, this would be an API call)
+        localStorage.setItem(`recording_${recording.id}`, JSON.stringify(updatedRecording));
+      }
+      
       toast({
         title: "Transcription complete",
         description: "Your speech has been transcribed successfully.",
@@ -119,6 +151,16 @@ export default function Analysis() {
     try {
       const result = await analyzeTranscript(transcript.text);
       setAnalysis(result);
+      
+      // Update the recording with analysis
+      if (recording) {
+        const updatedRecording = { ...recording, analysis: result };
+        setRecording(updatedRecording);
+        
+        // Update in localStorage (in a real app, this would be an API call)
+        localStorage.setItem(`recording_${recording.id}`, JSON.stringify(updatedRecording));
+      }
+      
       toast({
         title: "Analysis complete",
         description: "Your speech has been analyzed successfully.",
@@ -142,19 +184,46 @@ export default function Analysis() {
   };
   
   const handlePlayPause = () => {
-    setIsPlaying(!isPlaying);
+    if (videoRef.current) {
+      if (isPlaying) {
+        videoRef.current.pause();
+      } else {
+        videoRef.current.play();
+      }
+      setIsPlaying(!isPlaying);
+    }
   };
   
   const handleMuteToggle = () => {
-    setIsMuted(!isMuted);
+    if (videoRef.current) {
+      videoRef.current.muted = !isMuted;
+      setIsMuted(!isMuted);
+    }
   };
   
   const handleSkipBack = () => {
-    setCurrentTime(Math.max(0, currentTime - 10));
+    if (videoRef.current) {
+      videoRef.current.currentTime = Math.max(0, videoRef.current.currentTime - 10);
+      setCurrentTime(videoRef.current.currentTime);
+    }
   };
   
   const handleSkipForward = () => {
-    setCurrentTime(Math.min(duration, currentTime + 10));
+    if (videoRef.current) {
+      videoRef.current.currentTime = Math.min(videoRef.current.duration, videoRef.current.currentTime + 10);
+      setCurrentTime(videoRef.current.currentTime);
+    }
+  };
+  
+  const handleProgressChange = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (!videoRef.current) return;
+    
+    const progressBar = e.currentTarget;
+    const rect = progressBar.getBoundingClientRect();
+    const pos = (e.clientX - rect.left) / rect.width;
+    
+    videoRef.current.currentTime = pos * duration;
+    setCurrentTime(videoRef.current.currentTime);
   };
   
   const getScoreColor = (score: number) => {
@@ -165,7 +234,11 @@ export default function Analysis() {
   
   return (
     <div className="container mx-auto px-4 py-8 max-w-6xl">
-      {recording ? (
+      {isLoading ? (
+        <div className="flex justify-center py-16">
+          <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-primary"></div>
+        </div>
+      ) : recording ? (
         <>
           <div className="mb-8">
             <h1 className="text-3xl font-bold text-primary mb-2">{recording.title}</h1>
@@ -184,33 +257,56 @@ export default function Analysis() {
                 <CardContent>
                   {/* Video Player */}
                   <div className="aspect-video bg-black rounded-md overflow-hidden mb-4">
-                    {recording.videoUrl ? (
+                    {recording.isVideo && recording.videoUrl ? (
                       <video
+                        ref={videoRef}
                         src={recording.videoUrl}
                         className="w-full h-full"
-                        controls
                         playsInline
-                        // These props would be controlled in a real implementation
-                        // muted={isMuted}
-                        // onTimeUpdate={(e) => setCurrentTime(e.currentTarget.currentTime)}
-                        // onLoadedMetadata={(e) => setDuration(e.currentTarget.duration)}
-                        // onPlay={() => setIsPlaying(true)}
-                        // onPause={() => setIsPlaying(false)}
+                        muted={isMuted}
+                        onTimeUpdate={(e) => setCurrentTime(e.currentTarget.currentTime)}
+                        onLoadedMetadata={(e) => setDuration(e.currentTarget.duration)}
+                        onPlay={() => setIsPlaying(true)}
+                        onPause={() => setIsPlaying(false)}
                       />
+                    ) : recording.audioUrl ? (
+                      <div className="w-full h-full flex flex-col items-center justify-center bg-muted">
+                        <audio
+                          ref={videoRef as unknown as React.RefObject<HTMLAudioElement>}
+                          src={recording.audioUrl}
+                          className="w-full"
+                          onTimeUpdate={(e) => setCurrentTime(e.currentTarget.currentTime)}
+                          onLoadedMetadata={(e) => setDuration(e.currentTarget.duration)}
+                          onPlay={() => setIsPlaying(true)}
+                          onPause={() => setIsPlaying(false)}
+                        />
+                        <div className="text-6xl text-muted-foreground mt-8">
+                          <Volume2 />
+                        </div>
+                        <p className="text-muted-foreground mt-4">Audio Recording</p>
+                      </div>
                     ) : (
                       <div className="w-full h-full flex items-center justify-center bg-muted">
-                        <p className="text-muted-foreground">Video not available</p>
+                        <p className="text-muted-foreground">Media not available</p>
                       </div>
                     )}
                   </div>
                   
-                  {/* Custom Controls - These would be functional in a real implementation */}
+                  {/* Custom Controls */}
                   <div className="flex flex-col space-y-2">
                     <div className="flex justify-between text-sm text-muted-foreground">
                       <span>{formatTime(currentTime)}</span>
                       <span>{formatTime(duration)}</span>
                     </div>
-                    <Progress value={(currentTime / duration) * 100} className="h-1" />
+                    <div 
+                      className="relative h-1 bg-muted rounded cursor-pointer overflow-hidden"
+                      onClick={handleProgressChange}
+                    >
+                      <div 
+                        className="absolute top-0 left-0 h-full bg-primary" 
+                        style={{ width: `${(currentTime / (duration || 1)) * 100}%` }} 
+                      />
+                    </div>
                     <div className="flex justify-between items-center pt-2">
                       <div className="flex items-center space-x-2">
                         <Button variant="ghost" size="icon" onClick={handleMuteToggle}>
@@ -713,8 +809,11 @@ export default function Analysis() {
           </div>
         </>
       ) : (
-        <div className="flex justify-center py-16">
-          <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-primary"></div>
+        <div className="flex flex-col items-center justify-center py-16">
+          <p className="text-xl text-muted-foreground mb-4">Recording not found</p>
+          <Button onClick={() => window.history.back()}>
+            Go Back
+          </Button>
         </div>
       )}
     </div>

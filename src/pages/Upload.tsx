@@ -107,7 +107,7 @@ export default function Upload() {
     }, 200);
     
     try {
-      // Process the recording
+      // Process the recording and store in localStorage
       const recording = await processRecording(file);
       
       // Clear the interval if it's still running

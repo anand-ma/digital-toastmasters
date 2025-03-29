@@ -40,24 +40,99 @@ export interface Recording {
   duration: number;
   videoUrl?: string;
   audioUrl?: string;
+  isVideo?: boolean;
   transcript?: Transcript;
   analysis?: SpeechAnalysisResult;
 }
+
+// LocalStorage keys
+const STORAGE_KEYS = {
+  RECORDINGS: "recordings",
+  RECORDING_PREFIX: "recording_",
+  MEDIA_PREFIX: "media_"
+};
+
+// Store recording media in localStorage
+const storeMediaInLocalStorage = async (id: string, file: File): Promise<string> => {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.readAsDataURL(file);
+    reader.onload = () => {
+      try {
+        const dataUrl = reader.result as string;
+        localStorage.setItem(`${STORAGE_KEYS.MEDIA_PREFIX}${id}`, dataUrl);
+        resolve(dataUrl);
+      } catch (error) {
+        console.error("Error storing media in localStorage:", error);
+        reject(error);
+      }
+    };
+    reader.onerror = (error) => {
+      console.error("Error reading file:", error);
+      reject(error);
+    };
+  });
+};
+
+// Get recording media from localStorage
+export const getMediaFromLocalStorage = (id: string): string | null => {
+  return localStorage.getItem(`${STORAGE_KEYS.MEDIA_PREFIX}${id}`);
+};
+
+// Store recording in localStorage
+const storeRecording = (recording: Recording): void => {
+  try {
+    // Get existing recordings or initialize empty array
+    const existingRecordingsJson = localStorage.getItem(STORAGE_KEYS.RECORDINGS);
+    const existingRecordings: string[] = existingRecordingsJson ? JSON.parse(existingRecordingsJson) : [];
+    
+    // Add new recording ID if not already present
+    if (!existingRecordings.includes(recording.id)) {
+      existingRecordings.push(recording.id);
+      localStorage.setItem(STORAGE_KEYS.RECORDINGS, JSON.stringify(existingRecordings));
+    }
+    
+    // Store the recording data
+    localStorage.setItem(`${STORAGE_KEYS.RECORDING_PREFIX}${recording.id}`, JSON.stringify(recording));
+  } catch (error) {
+    console.error("Error storing recording:", error);
+  }
+};
 
 // Mock function to process a recording
 export async function processRecording(file: File): Promise<Recording> {
   // Simulate API call delay
   await new Promise(resolve => setTimeout(resolve, 2000));
   
-  // Generate a mock recording response
-  return {
-    id: Math.random().toString(36).substring(2, 15),
-    title: file.name.split(".")[0] || "Untitled Recording",
-    date: new Date().toISOString(),
-    duration: 45, // Assuming 45 seconds for all recordings
-    videoUrl: URL.createObjectURL(file),
-    audioUrl: URL.createObjectURL(file),
-  };
+  // Generate a unique ID for the recording
+  const id = Math.random().toString(36).substring(2, 15);
+  
+  // Determine if it's a video or audio file
+  const isVideo = file.type.startsWith('video');
+  
+  try {
+    // Store media in localStorage and get dataURL
+    const dataUrl = await storeMediaInLocalStorage(id, file);
+    
+    // Create recording object
+    const recording: Recording = {
+      id,
+      title: file.name.split(".")[0] || "Untitled Recording",
+      date: new Date().toISOString(),
+      duration: 45, // We'll assume 45 seconds for now
+      isVideo,
+      videoUrl: isVideo ? dataUrl : undefined,
+      audioUrl: !isVideo ? dataUrl : undefined,
+    };
+    
+    // Store recording in localStorage
+    storeRecording(recording);
+    
+    return recording;
+  } catch (error) {
+    console.error("Error processing recording:", error);
+    throw error;
+  }
 }
 
 // Mock function to transcribe audio
@@ -111,60 +186,109 @@ export async function analyzeTranscript(transcript: string): Promise<SpeechAnaly
   };
 }
 
+// Function to get a recording by ID
+export async function getRecording(id: string): Promise<Recording | null> {
+  // Simulate API call delay
+  await new Promise(resolve => setTimeout(resolve, 500));
+  
+  try {
+    const recordingJson = localStorage.getItem(`${STORAGE_KEYS.RECORDING_PREFIX}${id}`);
+    if (!recordingJson) {
+      return null;
+    }
+    
+    const recording = JSON.parse(recordingJson) as Recording;
+    
+    // Get media URL from localStorage
+    if (recording.isVideo) {
+      recording.videoUrl = getMediaFromLocalStorage(id);
+    } else {
+      recording.audioUrl = getMediaFromLocalStorage(id);
+    }
+    
+    return recording;
+  } catch (error) {
+    console.error("Error getting recording:", error);
+    return null;
+  }
+}
+
 // Mock function to get user recordings
 export async function getUserRecordings(): Promise<Recording[]> {
   // Simulate API call delay
   await new Promise(resolve => setTimeout(resolve, 1000));
   
-  // Return mock recordings data
-  return [
-    {
-      id: "rec123",
-      title: "AI Presentation",
-      date: "2023-09-15T14:30:00Z",
-      duration: 45,
-      analysis: {
-        fillerWordCount: 4,
-        fillerWords: [{ word: "um", count: 2 }, { word: "like", count: 1 }, { word: "you know", count: 1 }],
-        paceWpm: 125,
-        paceRating: "Good",
-        grammarIssues: [{ text: "like, you know,", suggestion: "such as", position: [91, 103] }],
-        confidenceScore: 82,
-        overallScore: 80,
-        feedback: "Your speech was well-structured with a clear introduction, body, and conclusion. Try to minimize filler words like 'um' and 'you know'."
-      }
-    },
-    {
-      id: "rec456",
-      title: "Team Meeting Introduction",
-      date: "2023-09-10T09:15:00Z",
-      duration: 30,
-      analysis: {
-        fillerWordCount: 2,
-        fillerWords: [{ word: "um", count: 1 }, { word: "so", count: 1 }],
-        paceWpm: 110,
-        paceRating: "Good",
-        grammarIssues: [],
-        confidenceScore: 88,
-        overallScore: 85,
-        feedback: "Great job on your team introduction! Your pace was appropriate and you maintained good clarity throughout."
-      }
-    },
-    {
-      id: "rec789",
-      title: "Product Pitch",
-      date: "2023-09-05T16:45:00Z",
-      duration: 60,
-      analysis: {
-        fillerWordCount: 8,
-        fillerWords: [{ word: "um", count: 3 }, { word: "like", count: 2 }, { word: "actually", count: 3 }],
-        paceWpm: 145,
-        paceRating: "Fast",
-        grammarIssues: [{ text: "me and my team", suggestion: "my team and I", position: [45, 58] }],
-        confidenceScore: 75,
-        overallScore: 70,
-        feedback: "Your product pitch contained valuable information, but was delivered too quickly. Try to slow down and reduce filler words to improve clarity."
+  try {
+    // Get recording IDs from localStorage
+    const recordingsJson = localStorage.getItem(STORAGE_KEYS.RECORDINGS);
+    if (!recordingsJson) {
+      // Return mock recordings if no recordings in localStorage
+      return [
+        {
+          id: "rec123",
+          title: "AI Presentation",
+          date: "2023-09-15T14:30:00Z",
+          duration: 45,
+          analysis: {
+            fillerWordCount: 4,
+            fillerWords: [{ word: "um", count: 2 }, { word: "like", count: 1 }, { word: "you know", count: 1 }],
+            paceWpm: 125,
+            paceRating: "Good",
+            grammarIssues: [{ text: "like, you know,", suggestion: "such as", position: [91, 103] }],
+            confidenceScore: 82,
+            overallScore: 80,
+            feedback: "Your speech was well-structured with a clear introduction, body, and conclusion. Try to minimize filler words like 'um' and 'you know'."
+          }
+        },
+        {
+          id: "rec456",
+          title: "Team Meeting Introduction",
+          date: "2023-09-10T09:15:00Z",
+          duration: 30,
+          analysis: {
+            fillerWordCount: 2,
+            fillerWords: [{ word: "um", count: 1 }, { word: "so", count: 1 }],
+            paceWpm: 110,
+            paceRating: "Good",
+            grammarIssues: [],
+            confidenceScore: 88,
+            overallScore: 85,
+            feedback: "Great job on your team introduction! Your pace was appropriate and you maintained good clarity throughout."
+          }
+        },
+        {
+          id: "rec789",
+          title: "Product Pitch",
+          date: "2023-09-05T16:45:00Z",
+          duration: 60,
+          analysis: {
+            fillerWordCount: 8,
+            fillerWords: [{ word: "um", count: 3 }, { word: "like", count: 2 }, { word: "actually", count: 3 }],
+            paceWpm: 145,
+            paceRating: "Fast",
+            grammarIssues: [{ text: "me and my team", suggestion: "my team and I", position: [45, 58] }],
+            confidenceScore: 75,
+            overallScore: 70,
+            feedback: "Your product pitch contained valuable information, but was delivered too quickly. Try to slow down and reduce filler words to improve clarity."
+          }
+        }
+      ];
+    }
+    
+    // Get recordings from localStorage
+    const recordingIds: string[] = JSON.parse(recordingsJson);
+    const recordings: Recording[] = [];
+    
+    for (const id of recordingIds) {
+      const recordingJson = localStorage.getItem(`${STORAGE_KEYS.RECORDING_PREFIX}${id}`);
+      if (recordingJson) {
+        recordings.push(JSON.parse(recordingJson) as Recording);
       }
     }
-  ];
+    
+    return recordings;
+  } catch (error) {
+    console.error("Error getting recordings:", error);
+    return [];
+  }
 }
