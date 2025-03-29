@@ -44,6 +44,9 @@ export default function Analysis() {
   const [transcript, setTranscript] = useState<Transcript | null>(null);
   const [analysis, setAnalysis] = useState<SpeechAnalysisResult | null>(null);
   
+  // Add state for active tab
+  const [activeTab, setActiveTab] = useState<string>("transcript");
+  
   const [isPlaying, setIsPlaying] = useState<boolean>(false);
   const [isMuted, setIsMuted] = useState<boolean>(false);
   const [currentTime, setCurrentTime] = useState<number>(0);
@@ -222,6 +225,10 @@ export default function Analysis() {
     try {
       const result = await analyzeTranscript(transcript.text);
       setAnalysis(result);
+      
+      // Set the active tab to analysis when analysis is complete
+      setActiveTab("analysis");
+      
       toast({
         title: "Analysis complete",
         description: "Your speech has been analyzed successfully.",
@@ -350,7 +357,7 @@ export default function Analysis() {
               </Card>
               
               {/* Tabs for Transcript and Analysis */}
-              <Tabs defaultValue="transcript" className="mb-8">
+              <Tabs value={activeTab} onValueChange={setActiveTab} className="mb-8">
                 <TabsList className="grid grid-cols-2">
                   <TabsTrigger value="transcript" className="flex items-center gap-2">
                     <FileText className="h-4 w-4" /> Transcript

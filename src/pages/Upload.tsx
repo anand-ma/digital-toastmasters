@@ -113,7 +113,7 @@ export default function Upload() {
         }
         return newProgress;
       });
-    }, 200);
+    }, 20);
     
     try {
       const recording = await processRecording(file);
