@@ -1,4 +1,3 @@
-
 import { useState, useEffect, useRef } from "react";
 import { useParams } from "react-router-dom";
 import { 
@@ -13,7 +12,8 @@ import {
   BarChart3,
   MessageSquare,
   ChevronsUpDown,
-  Zap
+  Zap,
+  FileAudio
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -54,7 +54,6 @@ export default function Analysis() {
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [mediaError, setMediaError] = useState<boolean>(false);
   
-  // Load the recording
   useEffect(() => {
     const fetchRecording = async () => {
       if (!id) {
@@ -72,7 +71,6 @@ export default function Analysis() {
         if (result) {
           setRecording(result);
           
-          // Check if media is available
           if ((!result.videoUrl && result.isVideo) || (!result.audioUrl && !result.isVideo)) {
             setMediaError(true);
             toast({
@@ -82,12 +80,10 @@ export default function Analysis() {
             });
           }
           
-          // If there is a transcript, set it
           if (result.transcript) {
             setTranscript(result.transcript);
           }
           
-          // If there is an analysis, set it
           if (result.analysis) {
             setAnalysis(result.analysis);
           }
@@ -122,12 +118,10 @@ export default function Analysis() {
       const result = await transcribeAudio(recording.id);
       setTranscript(result);
       
-      // Update the recording with transcript
       if (recording) {
         const updatedRecording = { ...recording, transcript: result };
         setRecording(updatedRecording);
         
-        // Update in localStorage (in a real app, this would be an API call)
         localStorage.setItem(`recording_${recording.id}`, JSON.stringify(updatedRecording));
       }
       
@@ -163,12 +157,10 @@ export default function Analysis() {
       const result = await analyzeTranscript(transcript.text);
       setAnalysis(result);
       
-      // Update the recording with analysis
       if (recording) {
         const updatedRecording = { ...recording, analysis: result };
         setRecording(updatedRecording);
         
-        // Update in localStorage (in a real app, this would be an API call)
         localStorage.setItem(`recording_${recording.id}`, JSON.stringify(updatedRecording));
       }
       
@@ -259,14 +251,12 @@ export default function Analysis() {
           </div>
           
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-            {/* Video/Audio Player Section */}
             <div className="lg:col-span-2">
               <Card className="mb-8">
                 <CardHeader className="pb-0">
                   <CardTitle>Recording Playback</CardTitle>
                 </CardHeader>
                 <CardContent>
-                  {/* Video Player */}
                   <div className="aspect-video bg-black rounded-md overflow-hidden mb-4">
                     {!mediaError && recording.isVideo && recording.videoUrl ? (
                       <video
@@ -326,7 +316,6 @@ export default function Analysis() {
                     )}
                   </div>
                   
-                  {/* Custom Controls */}
                   <div className="flex flex-col space-y-2">
                     <div className="flex justify-between text-sm text-muted-foreground">
                       <span>{formatTime(currentTime)}</span>
@@ -365,7 +354,6 @@ export default function Analysis() {
                         </Button>
                       </div>
                       <div className="flex items-center space-x-2">
-                        {/* Placeholder for additional controls */}
                         <div className="w-8"></div>
                       </div>
                     </div>
@@ -373,7 +361,6 @@ export default function Analysis() {
                 </CardContent>
               </Card>
               
-              {/* Tabs for Transcript and Analysis */}
               <Tabs defaultValue="transcript" className="mb-8">
                 <TabsList className="grid grid-cols-2">
                   <TabsTrigger value="transcript" className="flex items-center gap-2">
@@ -404,8 +391,6 @@ export default function Analysis() {
                                 <div 
                                   key={index} 
                                   className="p-2 rounded border hover:bg-muted/30 transition-colors cursor-pointer"
-                                  // In a real implementation, this would jump to that segment in the video
-                                  // onClick={() => setCurrentTime(segment.start)}
                                 >
                                   <div className="flex justify-between text-sm mb-1">
                                     <span className="text-muted-foreground">
@@ -450,7 +435,6 @@ export default function Analysis() {
                 <TabsContent value="analysis" className="p-4 border rounded-md mt-2">
                   {analysis ? (
                     <div className="space-y-6">
-                      {/* Overall Score */}
                       <div className="flex flex-col items-center py-4">
                         <div className="relative">
                           <svg className="w-32 h-32">
@@ -482,7 +466,6 @@ export default function Analysis() {
                         <p className="mt-2 font-semibold text-lg">Overall Score</p>
                       </div>
                       
-                      {/* Metrics Grid */}
                       <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
                         <Card>
                           <CardContent className="p-4 text-center">
@@ -548,9 +531,7 @@ export default function Analysis() {
                         </Card>
                       </div>
                       
-                      {/* Details Accordion */}
                       <Accordion type="multiple" className="mt-8">
-                        {/* Filler Words Analysis */}
                         <AccordionItem value="filler-words">
                           <AccordionTrigger>Filler Words</AccordionTrigger>
                           <AccordionContent>
@@ -578,7 +559,6 @@ export default function Analysis() {
                           </AccordionContent>
                         </AccordionItem>
                         
-                        {/* Grammar Issues */}
                         <AccordionItem value="grammar-issues">
                           <AccordionTrigger>Grammar Suggestions</AccordionTrigger>
                           <AccordionContent>
@@ -611,7 +591,6 @@ export default function Analysis() {
                           </AccordionContent>
                         </AccordionItem>
                         
-                        {/* Body Language Analysis - Only shown if available */}
                         {analysis.bodyLanguage && (
                           <AccordionItem value="body-language">
                             <AccordionTrigger>Body Language</AccordionTrigger>
@@ -667,7 +646,6 @@ export default function Analysis() {
                         )}
                       </Accordion>
                       
-                      {/* AI Feedback */}
                       <Card className="mt-8">
                         <CardHeader className="pb-3">
                           <CardTitle className="flex items-center gap-2">
@@ -718,7 +696,6 @@ export default function Analysis() {
               </Tabs>
             </div>
             
-            {/* Analysis Summary Sidebar */}
             <div>
               <Card className="sticky top-4">
                 <CardHeader>
