@@ -62,8 +62,8 @@ export default function Analysis() {
           title: "AI Presentation",
           date: new Date().toISOString(),
           duration: 45,
-          videoUrl: "https://sample-videos.com/video123/mp4/720/big_buck_bunny_720p_1mb.mp4", // Example URL
-          audioUrl: "https://sample-videos.com/video123/mp4/720/big_buck_bunny_720p_1mb.mp4", // Example URL
+          videoUrl: "https://www.sample-videos.com/video321/mp4/480/big_buck_bunny_480p_1mb.mp4", // Example URL
+          audioUrl: "https://www.sample-videos.com/video321/mp4/480/big_buck_bunny_480p_1mb.mp4", // Example URL
         };
         
         setRecording(mockRecording);
