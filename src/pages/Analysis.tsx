@@ -52,6 +52,7 @@ export default function Analysis() {
   const [isTranscribing, setIsTranscribing] = useState<boolean>(false);
   const [isAnalyzing, setIsAnalyzing] = useState<boolean>(false);
   const [isLoading, setIsLoading] = useState<boolean>(true);
+  const [mediaError, setMediaError] = useState<boolean>(false);
   
   // Load the recording
   useEffect(() => {
@@ -70,6 +71,16 @@ export default function Analysis() {
         const result = await getRecording(id);
         if (result) {
           setRecording(result);
+          
+          // Check if media is available
+          if ((!result.videoUrl && result.isVideo) || (!result.audioUrl && !result.isVideo)) {
+            setMediaError(true);
+            toast({
+              title: "Media not available",
+              description: "The media file could not be loaded from storage. It may have exceeded browser storage limits.",
+              variant: "destructive",
+            });
+          }
           
           // If there is a transcript, set it
           if (result.transcript) {
@@ -257,7 +268,7 @@ export default function Analysis() {
                 <CardContent>
                   {/* Video Player */}
                   <div className="aspect-video bg-black rounded-md overflow-hidden mb-4">
-                    {recording.isVideo && recording.videoUrl ? (
+                    {!mediaError && recording.isVideo && recording.videoUrl ? (
                       <video
                         ref={videoRef}
                         src={recording.videoUrl}
@@ -268,8 +279,16 @@ export default function Analysis() {
                         onLoadedMetadata={(e) => setDuration(e.currentTarget.duration)}
                         onPlay={() => setIsPlaying(true)}
                         onPause={() => setIsPlaying(false)}
+                        onError={() => {
+                          setMediaError(true);
+                          toast({
+                            title: "Media playback error",
+                            description: "There was an error playing this media file.",
+                            variant: "destructive",
+                          });
+                        }}
                       />
-                    ) : recording.audioUrl ? (
+                    ) : !mediaError && recording.audioUrl ? (
                       <div className="w-full h-full flex flex-col items-center justify-center bg-muted">
                         <audio
                           ref={videoRef as unknown as React.RefObject<HTMLAudioElement>}
@@ -279,6 +298,14 @@ export default function Analysis() {
                           onLoadedMetadata={(e) => setDuration(e.currentTarget.duration)}
                           onPlay={() => setIsPlaying(true)}
                           onPause={() => setIsPlaying(false)}
+                          onError={() => {
+                            setMediaError(true);
+                            toast({
+                              title: "Media playback error",
+                              description: "There was an error playing this audio file.",
+                              variant: "destructive",
+                            });
+                          }}
                         />
                         <div className="text-6xl text-muted-foreground mt-8">
                           <Volume2 />
@@ -286,8 +313,15 @@ export default function Analysis() {
                         <p className="text-muted-foreground mt-4">Audio Recording</p>
                       </div>
                     ) : (
-                      <div className="w-full h-full flex items-center justify-center bg-muted">
-                        <p className="text-muted-foreground">Media not available</p>
+                      <div className="w-full h-full flex flex-col items-center justify-center bg-muted">
+                        <div className="text-6xl text-muted-foreground mb-4">
+                          {recording.isVideo ? <Video /> : <FileAudio />}
+                        </div>
+                        <p className="text-muted-foreground mb-2">Media not available</p>
+                        <p className="text-xs text-muted-foreground max-w-md text-center">
+                          The media file could not be loaded. This may be due to browser storage limitations.
+                          For best results, use smaller files or try using the app in a different browser.
+                        </p>
                       </div>
                     )}
                   </div>
@@ -309,18 +343,24 @@ export default function Analysis() {
                     </div>
                     <div className="flex justify-between items-center pt-2">
                       <div className="flex items-center space-x-2">
-                        <Button variant="ghost" size="icon" onClick={handleMuteToggle}>
+                        <Button variant="ghost" size="icon" onClick={handleMuteToggle} disabled={mediaError}>
                           {isMuted ? <VolumeX className="h-5 w-5" /> : <Volume2 className="h-5 w-5" />}
                         </Button>
                       </div>
                       <div className="flex items-center space-x-2">
-                        <Button variant="ghost" size="icon" onClick={handleSkipBack}>
+                        <Button variant="ghost" size="icon" onClick={handleSkipBack} disabled={mediaError}>
                           <SkipBack className="h-5 w-5" />
                         </Button>
-                        <Button variant="default" size="icon" className="h-10 w-10 rounded-full" onClick={handlePlayPause}>
+                        <Button 
+                          variant="default" 
+                          size="icon" 
+                          className="h-10 w-10 rounded-full" 
+                          onClick={handlePlayPause}
+                          disabled={mediaError}
+                        >
                           {isPlaying ? <Pause className="h-5 w-5" /> : <Play className="h-5 w-5" />}
                         </Button>
-                        <Button variant="ghost" size="icon" onClick={handleSkipForward}>
+                        <Button variant="ghost" size="icon" onClick={handleSkipForward} disabled={mediaError}>
                           <SkipForward className="h-5 w-5" />
                         </Button>
                       </div>

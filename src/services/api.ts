@@ -1,3 +1,4 @@
+
 // Mock data and API service interfaces
 
 // Speech analysis result type
@@ -67,12 +68,13 @@ const storeMediaInLocalStorage = async (id: string, file: File): Promise<string>
           type: file.type,
           size: file.size,
           name: file.name,
-          lastModified: file.lastModified
+          lastModified: file.lastModified,
+          dataUrl // Store the actual data URL in the metadata
         };
         
         localStorage.setItem(`${STORAGE_KEYS.MEDIA_PREFIX}${id}`, JSON.stringify(mediaMetadata));
         
-        // Return the dataURL for immediate use without storing it
+        // Return the dataURL for immediate use without storing it separately
         resolve(dataUrl);
       } catch (error) {
         console.error("Error storing media metadata in localStorage:", error);
@@ -88,12 +90,16 @@ const storeMediaInLocalStorage = async (id: string, file: File): Promise<string>
 
 // Get recording media reference from localStorage
 export const getMediaFromLocalStorage = (id: string): string | null => {
-  const mediaMetadata = localStorage.getItem(`${STORAGE_KEYS.MEDIA_PREFIX}${id}`);
-  if (!mediaMetadata) return null;
-  
-  // In a real application, you'd use this metadata to retrieve the actual media
-  // from a more suitable storage solution
-  return null; // We'll handle this in the UI later
+  try {
+    const mediaMetadataJson = localStorage.getItem(`${STORAGE_KEYS.MEDIA_PREFIX}${id}`);
+    if (!mediaMetadataJson) return null;
+    
+    const mediaMetadata = JSON.parse(mediaMetadataJson);
+    return mediaMetadata.dataUrl || null;
+  } catch (error) {
+    console.error("Error retrieving media from localStorage:", error);
+    return null;
+  }
 };
 
 // Store recording in localStorage
@@ -131,15 +137,6 @@ export async function processRecording(file: File): Promise<Recording> {
   try {
     // Store media reference and get dataURL for immediate use
     const dataUrl = await storeMediaInLocalStorage(id, file);
-    
-    // Use sessionStorage to temporarily store the actual media content
-    // This allows us to access it during this session but avoids localStorage limits
-    try {
-      sessionStorage.setItem(`temp_media_${id}`, dataUrl);
-    } catch (sessionError) {
-      console.warn("Session storage limit exceeded. Media preview may not be available.", sessionError);
-      // Continue anyway - we'll handle this in the UI
-    }
     
     // Create recording object with references but not actual media content
     const recording: Recording = {
@@ -181,11 +178,14 @@ export async function getRecording(id: string): Promise<Recording | null> {
     
     const recording = JSON.parse(recordingJson) as Recording;
     
-    // Try to get the media URL from sessionStorage first (for this session)
-    if (recording.isVideo) {
-      recording.videoUrl = sessionStorage.getItem(`temp_media_${id}`);
-    } else {
-      recording.audioUrl = sessionStorage.getItem(`temp_media_${id}`);
+    // Try to get the media URL from localStorage
+    const mediaUrl = getMediaFromLocalStorage(id);
+    if (mediaUrl) {
+      if (recording.isVideo) {
+        recording.videoUrl = mediaUrl;
+      } else {
+        recording.audioUrl = mediaUrl;
+      }
     }
     
     return recording;
