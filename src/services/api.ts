@@ -1,3 +1,4 @@
+
 // Mock data and API service interfaces
 
 // Speech analysis result type
@@ -107,7 +108,7 @@ const storeRecording = (recording: Recording): void => {
       localStorage.setItem(STORAGE_KEYS.RECORDINGS, JSON.stringify(existingRecordings));
     }
     
-    // Store the recording data (without the actual media content)
+    // Store the recording metadata (without the actual media content)
     localStorage.setItem(`${STORAGE_KEYS.RECORDING_PREFIX}${recording.id}`, JSON.stringify(recording));
   } catch (error) {
     console.error("Error storing recording:", error);

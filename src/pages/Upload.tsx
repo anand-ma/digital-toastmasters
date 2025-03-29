@@ -1,3 +1,4 @@
+
 import { useState, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { Upload as UploadIcon, X, FileVideo, FileAudio, AlertCircle } from "lucide-react";
@@ -137,6 +138,14 @@ export default function Upload() {
       
       // More specific error message based on the error type
       let errorMessage = "Failed to process your file. Please try again.";
+      
+      if (error instanceof Error) {
+        if (error.message.includes("storage") || error.message.includes("quota")) {
+          errorMessage = "Storage quota exceeded. Try using a smaller file or contact support.";
+        } else if (error.message.includes("network") || error.message.includes("connection")) {
+          errorMessage = "Network error. Check your internet connection and try again.";
+        }
+      }
       
       toast({
         title: "Upload Failed",
