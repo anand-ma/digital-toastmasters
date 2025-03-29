@@ -24,6 +24,7 @@ const otpSchema = z.object({
 
 type OtpFormValues = z.infer<typeof otpSchema>
 
+// Use a named export with forwardRef
 export const AuthForms = forwardRef<HTMLDivElement, {}>((props, ref) => {
   const [isLoading, setIsLoading] = useState(false)
   const [email, setEmail] = useState('')
@@ -162,5 +163,5 @@ export const AuthForms = forwardRef<HTMLDivElement, {}>((props, ref) => {
   )
 })
 
-// For backwards compatibility
-export { AuthForms as AuthForms }
+// Set display name for devtools
+AuthForms.displayName = 'AuthForms'
