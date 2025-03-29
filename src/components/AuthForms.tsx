@@ -1,11 +1,11 @@
 
-import { useState, useEffect, forwardRef } from 'react'
+import { useState, forwardRef } from 'react'
 import { useAuth } from '@/contexts/AuthContext'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card'
-import { Loader2 } from 'lucide-react'
+import { Loader2, Mail, ArrowRight } from 'lucide-react'
 import { 
   InputOTP, 
   InputOTPGroup, 
@@ -67,9 +67,9 @@ export const AuthForms = forwardRef<HTMLDivElement, {}>((props, ref) => {
 
   if (isEmailSent) {
     return (
-      <Card className="w-full max-w-md mx-auto">
+      <Card className="w-full max-w-md mx-auto border-t-4 border-t-primary shadow-sm transition-all">
         <CardHeader>
-          <CardTitle>Enter verification code</CardTitle>
+          <CardTitle className="text-gradient">Enter verification code</CardTitle>
           <CardDescription>We've sent a 6-digit code to {email}</CardDescription>
         </CardHeader>
         <Form {...form}>
@@ -105,6 +105,7 @@ export const AuthForms = forwardRef<HTMLDivElement, {}>((props, ref) => {
               >
                 {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                 Verify code
+                {!isLoading && <ArrowRight className="ml-2 h-4 w-4" />}
               </Button>
               <Button 
                 variant="ghost" 
@@ -122,9 +123,9 @@ export const AuthForms = forwardRef<HTMLDivElement, {}>((props, ref) => {
   }
 
   return (
-    <Card className="w-full max-w-md mx-auto" ref={ref}>
+    <Card className="w-full max-w-md mx-auto border-t-4 border-t-primary shadow-sm transition-all" ref={ref}>
       <CardHeader>
-        <CardTitle>Sign in to Digital Toastmasters</CardTitle>
+        <CardTitle className="text-gradient">Sign in to Digital Toastmasters</CardTitle>
         <CardDescription>
           {email.toLowerCase() === ADMIN_EMAIL.toLowerCase()
             ? "Enter admin email to login directly"
@@ -135,14 +136,18 @@ export const AuthForms = forwardRef<HTMLDivElement, {}>((props, ref) => {
         <CardContent className="space-y-4">
           <div className="space-y-2">
             <Label htmlFor="email">Email</Label>
-            <Input 
-              id="email" 
-              type="email" 
-              placeholder="you@example.com"
-              required 
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-            />
+            <div className="relative">
+              <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Input 
+                id="email" 
+                type="email" 
+                placeholder="you@example.com"
+                required 
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+                className="pl-10"
+              />
+            </div>
             {email.toLowerCase() === ADMIN_EMAIL.toLowerCase() && (
               <p className="text-xs text-muted-foreground mt-1">
                 Admin login: No verification code required
@@ -151,11 +156,12 @@ export const AuthForms = forwardRef<HTMLDivElement, {}>((props, ref) => {
           </div>
         </CardContent>
         <CardFooter>
-          <Button className="w-full" type="submit" disabled={isLoading}>
+          <Button className="w-full group" type="submit" disabled={isLoading}>
             {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
             {email.toLowerCase() === ADMIN_EMAIL.toLowerCase()
               ? "Login as Admin"
               : "Send verification code"}
+            {!isLoading && <ArrowRight className="ml-2 h-4 w-4 group-hover:translate-x-1 transition-transform" />}
           </Button>
         </CardFooter>
       </form>

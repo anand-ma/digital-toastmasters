@@ -82,7 +82,7 @@
 
   .fade-in {
     opacity: 0;
-    animation: fadeIn 0.5s ease-out forwards;
+    animation: fadeIn 0.8s ease-out forwards;
   }
 
   @keyframes fadeIn {
@@ -97,7 +97,7 @@
   .slide-up {
     transform: translateY(20px);
     opacity: 0;
-    animation: slideUp 0.5s ease-out forwards;
+    animation: slideUp 0.8s ease-out forwards;
   }
 
   @keyframes slideUp {
@@ -109,5 +109,13 @@
       transform: translateY(0);
       opacity: 1;
     }
+  }
+  
+  .text-gradient {
+    @apply bg-gradient-to-r from-primary to-primary/70 bg-clip-text text-transparent;
+  }
+
+  .card-hover {
+    @apply transition-all duration-300 hover:shadow-lg hover:-translate-y-1;
   }
 }
