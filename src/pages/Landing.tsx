@@ -4,6 +4,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useNavigate, useLocation } from "react-router-dom";
 import { useEffect, useRef } from "react";
 import { Mic, BarChart, Brain } from "lucide-react";
+import { AspectRatio } from "@/components/ui/aspect-ratio";
 
 export default function Landing() {
   const { user } = useAuth();
@@ -70,8 +71,22 @@ export default function Landing() {
           </div>
         </div>
         
-        <div className="bg-background rounded-lg border shadow-sm p-6">
-          <AuthForms ref={authFormRef} />
+        <div className="flex flex-col gap-6">
+          <div className="rounded-lg overflow-hidden border shadow-sm">
+            <AspectRatio ratio={16 / 9} className="bg-muted">
+              <div className="absolute inset-0 flex items-center justify-center">
+                <img 
+                  src="https://images.unsplash.com/photo-1543269865-cbf427effbad?q=80&w=1920&auto=format&fit=crop"
+                  alt="People giving presentations and improving public speaking skills"
+                  className="object-cover w-full h-full dark:opacity-90"
+                />
+              </div>
+            </AspectRatio>
+          </div>
+          
+          <div className="bg-background rounded-lg border shadow-sm p-6">
+            <AuthForms ref={authFormRef} />
+          </div>
         </div>
       </div>
     </div>
