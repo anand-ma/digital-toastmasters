@@ -1,3 +1,4 @@
+
 // Mock data and API service interfaces
 
 // Speech analysis result type
@@ -70,8 +71,9 @@ const storeMediaInSupabase = async (id: string, file: File): Promise<string> => 
       console.error('Error uploading to Supabase:', error);
       
       // If we have a row-level security error, fallback to localStorage
+      // Fixed: Check error message without accessing statusCode property
       if (error.message?.includes('row-level security') || 
-          error.statusCode === 403 || 
+          error.message?.includes('403') ||
           error.message?.includes('Unauthorized')) {
         
         console.log('Using localStorage fallback for file storage');
