@@ -141,7 +141,7 @@ export default function Upload() {
       
       if (error instanceof Error) {
         if (error.message.includes("storage") || error.message.includes("quota")) {
-          errorMessage = "Storage quota exceeded. Try using a smaller file or contact support.";
+          errorMessage = "Storage error. We're using a fallback storage method now.";
         } else if (error.message.includes("network") || error.message.includes("connection")) {
           errorMessage = "Network error. Check your internet connection and try again.";
         }

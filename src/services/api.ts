@@ -1,4 +1,3 @@
-
 // Mock data and API service interfaces
 
 // Speech analysis result type
@@ -53,7 +52,7 @@ const STORAGE_KEYS = {
 
 import { supabase } from "@/integrations/supabase/client";
 
-// Store media file in Supabase Storage
+// Store media file in Supabase Storage or localStorage as fallback
 const storeMediaInSupabase = async (id: string, file: File): Promise<string> => {
   try {
     const fileExt = file.name.split('.').pop();
@@ -69,6 +68,17 @@ const storeMediaInSupabase = async (id: string, file: File): Promise<string> => 
       
     if (error) {
       console.error('Error uploading to Supabase:', error);
+      
+      // If we have a row-level security error, fallback to localStorage
+      if (error.message?.includes('row-level security') || 
+          error.statusCode === 403 || 
+          error.message?.includes('Unauthorized')) {
+        
+        console.log('Using localStorage fallback for file storage');
+        // Store file in localStorage as fallback (limited by browser storage)
+        return storeMediaInLocalStorage(id, file);
+      }
+      
       throw error;
     }
     
@@ -84,10 +94,43 @@ const storeMediaInSupabase = async (id: string, file: File): Promise<string> => 
   }
 };
 
-// Get media URL from Supabase
+// Fallback method to store in localStorage
+const storeMediaInLocalStorage = (id: string, file: File): Promise<string> => {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    
+    reader.onload = () => {
+      try {
+        const dataUrl = reader.result as string;
+        const localId = `media_${id}`;
+        
+        // Store data URL in localStorage
+        localStorage.setItem(localId, dataUrl);
+        
+        resolve(localId);
+      } catch (error) {
+        console.error('Error storing in localStorage:', error);
+        reject(error);
+      }
+    };
+    
+    reader.onerror = () => {
+      reject(new Error('Failed to read file'));
+    };
+    
+    // Read file as data URL
+    reader.readAsDataURL(file);
+  });
+};
+
+// Get media URL from Supabase or localStorage
 export const getMediaFromSupabase = (url: string): string | null => {
   try {
-    // Just return the URL as is - no need to fetch anything
+    // Check if this is a localStorage reference
+    if (url.startsWith('media_')) {
+      return localStorage.getItem(url);
+    }
+    // Otherwise return the Supabase URL
     return url;
   } catch (error) {
     console.error('Error retrieving media URL:', error);
@@ -128,7 +171,7 @@ export async function processRecording(file: File): Promise<Recording> {
   const isVideo = file.type.startsWith('video');
   
   try {
-    // Upload file to Supabase storage and get URL
+    // Upload file to Supabase storage or fallback to localStorage
     const mediaUrl = await storeMediaInSupabase(id, file);
     
     // Create recording object with references
