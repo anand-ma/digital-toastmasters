@@ -1,4 +1,3 @@
-
 // Mock data and API service interfaces
 
 // Speech analysis result type
@@ -52,18 +51,31 @@ const STORAGE_KEYS = {
   MEDIA_PREFIX: "media_"
 };
 
-// Store recording media in localStorage
+// Store recording media in localStorage - with file size handling
 const storeMediaInLocalStorage = async (id: string, file: File): Promise<string> => {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.readAsDataURL(file);
     reader.onload = () => {
       try {
+        // Instead of storing the full media in localStorage, we'll store a reference
+        // and only keep metadata in localStorage
         const dataUrl = reader.result as string;
-        localStorage.setItem(`${STORAGE_KEYS.MEDIA_PREFIX}${id}`, dataUrl);
+        
+        // Create a recording reference with only metadata
+        const mediaMetadata = {
+          type: file.type,
+          size: file.size,
+          name: file.name,
+          lastModified: file.lastModified
+        };
+        
+        localStorage.setItem(`${STORAGE_KEYS.MEDIA_PREFIX}${id}`, JSON.stringify(mediaMetadata));
+        
+        // Return the dataURL for immediate use without storing it
         resolve(dataUrl);
       } catch (error) {
-        console.error("Error storing media in localStorage:", error);
+        console.error("Error storing media metadata in localStorage:", error);
         reject(error);
       }
     };
@@ -74,9 +86,14 @@ const storeMediaInLocalStorage = async (id: string, file: File): Promise<string>
   });
 };
 
-// Get recording media from localStorage
+// Get recording media reference from localStorage
 export const getMediaFromLocalStorage = (id: string): string | null => {
-  return localStorage.getItem(`${STORAGE_KEYS.MEDIA_PREFIX}${id}`);
+  const mediaMetadata = localStorage.getItem(`${STORAGE_KEYS.MEDIA_PREFIX}${id}`);
+  if (!mediaMetadata) return null;
+  
+  // In a real application, you'd use this metadata to retrieve the actual media
+  // from a more suitable storage solution
+  return null; // We'll handle this in the UI later
 };
 
 // Store recording in localStorage
@@ -92,17 +109,18 @@ const storeRecording = (recording: Recording): void => {
       localStorage.setItem(STORAGE_KEYS.RECORDINGS, JSON.stringify(existingRecordings));
     }
     
-    // Store the recording data
+    // Store the recording data (without the actual media content)
     localStorage.setItem(`${STORAGE_KEYS.RECORDING_PREFIX}${recording.id}`, JSON.stringify(recording));
   } catch (error) {
     console.error("Error storing recording:", error);
+    throw error; // Rethrow to handle in the UI
   }
 };
 
 // Mock function to process a recording
 export async function processRecording(file: File): Promise<Recording> {
   // Simulate API call delay
-  await new Promise(resolve => setTimeout(resolve, 2000));
+  await new Promise(resolve => setTimeout(resolve, 1000));
   
   // Generate a unique ID for the recording
   const id = Math.random().toString(36).substring(2, 15);
@@ -111,27 +129,69 @@ export async function processRecording(file: File): Promise<Recording> {
   const isVideo = file.type.startsWith('video');
   
   try {
-    // Store media in localStorage and get dataURL
+    // Store media reference and get dataURL for immediate use
     const dataUrl = await storeMediaInLocalStorage(id, file);
     
-    // Create recording object
+    // Use sessionStorage to temporarily store the actual media content
+    // This allows us to access it during this session but avoids localStorage limits
+    try {
+      sessionStorage.setItem(`temp_media_${id}`, dataUrl);
+    } catch (sessionError) {
+      console.warn("Session storage limit exceeded. Media preview may not be available.", sessionError);
+      // Continue anyway - we'll handle this in the UI
+    }
+    
+    // Create recording object with references but not actual media content
     const recording: Recording = {
       id,
       title: file.name.split(".")[0] || "Untitled Recording",
       date: new Date().toISOString(),
       duration: 45, // We'll assume 45 seconds for now
       isVideo,
-      videoUrl: isVideo ? dataUrl : undefined,
-      audioUrl: !isVideo ? dataUrl : undefined,
+      // We're not storing the actual URLs in the recording object anymore
     };
     
-    // Store recording in localStorage
+    // Store recording metadata in localStorage
     storeRecording(recording);
+    
+    // Add the URLs to the returned object for immediate use
+    if (isVideo) {
+      recording.videoUrl = dataUrl;
+    } else {
+      recording.audioUrl = dataUrl;
+    }
     
     return recording;
   } catch (error) {
     console.error("Error processing recording:", error);
     throw error;
+  }
+}
+
+// Function to get a recording by ID, with media handling
+export async function getRecording(id: string): Promise<Recording | null> {
+  // Simulate API call delay
+  await new Promise(resolve => setTimeout(resolve, 500));
+  
+  try {
+    const recordingJson = localStorage.getItem(`${STORAGE_KEYS.RECORDING_PREFIX}${id}`);
+    if (!recordingJson) {
+      return null;
+    }
+    
+    const recording = JSON.parse(recordingJson) as Recording;
+    
+    // Try to get the media URL from sessionStorage first (for this session)
+    if (recording.isVideo) {
+      recording.videoUrl = sessionStorage.getItem(`temp_media_${id}`);
+    } else {
+      recording.audioUrl = sessionStorage.getItem(`temp_media_${id}`);
+    }
+    
+    return recording;
+  } catch (error) {
+    console.error("Error getting recording:", error);
+    return null;
   }
 }
 
@@ -184,33 +244,6 @@ export async function analyzeTranscript(transcript: string): Promise<SpeechAnaly
     overallScore: 80,
     feedback: "Your speech was well-structured with a clear introduction, body, and conclusion. Try to minimize filler words like 'um' and 'you know'. Your pace is good at 125 words per minute, making it easy to follow. Consider using more specific language instead of phrases like 'like, you know'. Overall, you delivered a clear and informative presentation on AI."
   };
-}
-
-// Function to get a recording by ID
-export async function getRecording(id: string): Promise<Recording | null> {
-  // Simulate API call delay
-  await new Promise(resolve => setTimeout(resolve, 500));
-  
-  try {
-    const recordingJson = localStorage.getItem(`${STORAGE_KEYS.RECORDING_PREFIX}${id}`);
-    if (!recordingJson) {
-      return null;
-    }
-    
-    const recording = JSON.parse(recordingJson) as Recording;
-    
-    // Get media URL from localStorage
-    if (recording.isVideo) {
-      recording.videoUrl = getMediaFromLocalStorage(id);
-    } else {
-      recording.audioUrl = getMediaFromLocalStorage(id);
-    }
-    
-    return recording;
-  } catch (error) {
-    console.error("Error getting recording:", error);
-    return null;
-  }
 }
 
 // Mock function to get user recordings
