@@ -55,9 +55,6 @@ export default function Analysis() {
   const [isTranscribing, setIsTranscribing] = useState<boolean>(false);
   const [isAnalyzing, setIsAnalyzing] = useState<boolean>(false);
   
-  const [originalFile, setOriginalFile] = useState<File | null>(null);
-  
-  // Add this state to store the recording data
   const [recordingData, setRecordingData] = useState<any>(null);
   
   // Update the initial useEffect to get recording data
@@ -210,6 +207,7 @@ export default function Analysis() {
     }
   };
   
+  // Updated function to analyze transcript using Anthropic's Claude
   const handleAnalyze = async () => {
     if (!transcript || !transcript.text) {
       toast({
@@ -223,6 +221,7 @@ export default function Analysis() {
     setIsAnalyzing(true);
     
     try {
+      // Call the updated analyzeTranscript function that now uses Anthropic's Claude
       const result = await analyzeTranscript(transcript.text);
       setAnalysis(result);
       
@@ -237,7 +236,7 @@ export default function Analysis() {
       console.error("Error analyzing transcript:", error);
       toast({
         title: "Analysis failed",
-        description: "Failed to analyze your speech. Please try again.",
+        description: `Failed to analyze your speech: ${error.message}`,
         variant: "destructive",
       });
     } finally {
