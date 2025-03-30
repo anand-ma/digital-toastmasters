@@ -44,124 +44,71 @@ export interface Recording {
   analysis?: SpeechAnalysisResult;
 }
 
-// Updated function to analyze a transcript using Anthropic Claude API
+// Mock function to process a recording
+export async function processRecording(file: File): Promise<Recording> {
+  // Simulate API call delay
+  await new Promise(resolve => setTimeout(resolve, 2000));
+  
+  // Generate a mock recording response
+  return {
+    id: Math.random().toString(36).substring(2, 15),
+    title: file.name.split(".")[0] || "Untitled Recording",
+    date: new Date().toISOString(),
+    duration: 45, // Assuming 45 seconds for all recordings
+    videoUrl: URL.createObjectURL(file),
+    audioUrl: URL.createObjectURL(file),
+  };
+}
+
+// Mock function to transcribe audio
+export async function transcribeAudio(recordingId: string): Promise<Transcript> {
+  // Simulate API call delay
+  await new Promise(resolve => setTimeout(resolve, 3000));
+  
+  // Return mock transcript data
+  return {
+    segments: [
+      { start: 0, end: 5.2, text: "Hello, my name is Sarah and today I'm going to talk about artificial intelligence.", confidence: 0.95 },
+      { start: 5.4, end: 11.8, text: "Um, AI has transformed many industries, like, you know, healthcare and education.", confidence: 0.88 },
+      { start: 12.0, end: 20.5, text: "One of the most significant advantages of AI is its ability to process large amounts of data quickly and identify patterns.", confidence: 0.92 },
+      { start: 21.0, end: 28.3, text: "However, there are also concerns about, um, privacy and ethical considerations that we need to address.", confidence: 0.85 },
+      { start: 28.5, end: 45.0, text: "In conclusion, AI offers tremendous benefits but requires careful implementation with proper oversight to ensure it serves humanity's best interests. Thank you for your attention.", confidence: 0.93 },
+    ],
+    text: "Hello, my name is Sarah and today I'm going to talk about artificial intelligence. Um, AI has transformed many industries, like, you know, healthcare and education. One of the most significant advantages of AI is its ability to process large amounts of data quickly and identify patterns. However, there are also concerns about, um, privacy and ethical considerations that we need to address. In conclusion, AI offers tremendous benefits but requires careful implementation with proper oversight to ensure it serves humanity's best interests. Thank you for your attention."
+  };
+}
+
+// Mock function to analyze a transcript
 export async function analyzeTranscript(transcript: string): Promise<SpeechAnalysisResult> {
-  try {
-    // Define the prompt for Claude
-    const prompt = `
-      Please analyze this speech transcript and provide feedback:
-      
-      """
-      ${transcript}
-      """
-      
-      Analyze the transcript for:
-      1. Filler words (um, uh, like, you know, etc.) - count each one
-      2. Speaking pace in words per minute (calculate based on word count)
-      3. Grammar issues with specific text segments and suggested improvements
-      4. Overall confidence level on a scale of 0-100
-      5. Body language assessment (if any visual cues are mentioned)
-      6. Overall score on a scale of 0-100
-      7. Detailed feedback paragraph
-      
-      Return ONLY a JSON object with this exact structure:
-      {
-        "fillerWordCount": number,
-        "fillerWords": [{"word": string, "count": number}],
-        "paceWpm": number,
-        "paceRating": "Slow" | "Good" | "Fast",
-        "grammarIssues": [{"text": string, "suggestion": string, "position": [number, number]}],
-        "confidenceScore": number,
-        "bodyLanguage": {
-          "posture": number,
-          "gestures": number,
-          "eyeContact": number
-        },
-        "overallScore": number,
-        "feedback": string
-      }
-      
-      Notes:
-      - For paceRating, use "Slow" for < 110 wpm, "Good" for 110-150 wpm, and "Fast" for > 150 wpm
-      - If no body language cues are mentioned, estimate reasonable scores around 70-80
-      - If grammar is perfect, return an empty array for grammarIssues
-      - Make the feedback actionable and specific
-      - Be encouraging but honest in your assessment
-    `;
-    
-    // Call the Anthropic API
-    const response = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-api-key': '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',
-        'anthropic-version': '2023-06-01'
+  // Simulate API call delay
+  await new Promise(resolve => setTimeout(resolve, 4000));
+  
+  // Return mock analysis data
+  return {
+    fillerWordCount: 4,
+    fillerWords: [
+      { word: "um", count: 2 },
+      { word: "like", count: 1 },
+      { word: "you know", count: 1 },
+    ],
+    paceWpm: 125,
+    paceRating: "Good",
+    grammarIssues: [
+      { 
+        text: "like, you know,", 
+        suggestion: "such as", 
+        position: [91, 103] 
       },
-      body: JSON.stringify({
-        model: 'claude-3-sonnet-20240229',
-        max_tokens: 4000,
-        messages: [
-          {
-            role: 'user',
-            content: prompt
-          }
-        ],
-        temperature: 0.1
-      })
-    });
-
-    if (!response.ok) {
-      throw new Error(`Anthropic API error: ${response.statusText}`);
-    }
-
-    const result = await response.json();
-    const analysisText = result.content[0].text;
-    
-    // Extract the JSON object from the response
-    // Claude's response might include some text before or after the JSON
-    const jsonMatch = analysisText.match(/\{[\s\S]*\}/);
-    if (!jsonMatch) {
-      throw new Error('Failed to parse analysis from Claude');
-    }
-
-    const analysis = JSON.parse(jsonMatch[0]) as SpeechAnalysisResult;
-    
-    // Ensure all required properties are present
-    return {
-      fillerWordCount: analysis.fillerWordCount || 0,
-      fillerWords: analysis.fillerWords || [],
-      paceWpm: analysis.paceWpm || 120,
-      paceRating: analysis.paceRating || "Good",
-      grammarIssues: analysis.grammarIssues || [],
-      confidenceScore: analysis.confidenceScore || 75,
-      bodyLanguage: analysis.bodyLanguage || {
-        posture: 75,
-        gestures: 75,
-        eyeContact: 75,
-      },
-      overallScore: analysis.overallScore || 75,
-      feedback: analysis.feedback || "Analysis could not be completed."
-    };
-  } catch (error) {
-    console.error("Error analyzing transcript with Claude:", error);
-    
-    // Fall back to a basic analysis if the API call fails
-    return {
-      fillerWordCount: 0,
-      fillerWords: [],
-      paceWpm: 120,
-      paceRating: "Good",
-      grammarIssues: [],
-      confidenceScore: 75,
-      bodyLanguage: {
-        posture: 75,
-        gestures: 75,
-        eyeContact: 75,
-      },
-      overallScore: 75,
-      feedback: "We couldn't analyze your transcript in detail. Please try again later."
-    };
-  }
+    ],
+    confidenceScore: 82,
+    bodyLanguage: {
+      posture: 85,
+      gestures: 70,
+      eyeContact: 75,
+    },
+    overallScore: 80,
+    feedback: "Your speech was well-structured with a clear introduction, body, and conclusion. Try to minimize filler words like 'um' and 'you know'. Your pace is good at 125 words per minute, making it easy to follow. Consider using more specific language instead of phrases like 'like, you know'. Overall, you delivered a clear and informative presentation on AI."
+  };
 }
 
 // Mock function to get user recordings
