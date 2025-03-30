@@ -1,17 +1,13 @@
-
 import { useState, useRef, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { Play, Pause, RefreshCw, StopCircle, Clock, MicOff, Mic, FileVideo } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
-import { useToast } from "@/components/ui/use-toast";
+import { useToast } from "@/hooks/use-toast";
 import { processRecording } from "@/services/api";
 import { ElevenLabsClient } from 'elevenlabs';
 import { getElevenLabsApiKey } from '@/services/elevenlabs';
-
-// Initialize the ElevenLabs client with state for the API key
-let client: ElevenLabsClient | null = null;
 
 export default function Record() {
   const navigate = useNavigate();
@@ -24,34 +20,55 @@ export default function Record() {
   const [isProcessing, setIsProcessing] = useState<boolean>(false);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [uploadProgress, setUploadProgress] = useState<number>(0);
+  const [elevenLabsClient, setElevenLabsClient] = useState<ElevenLabsClient | null>(null);
+  const [isClientInitialized, setIsClientInitialized] = useState<boolean>(false);
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<BlobPart[]>([]);
   const timerIntervalRef = useRef<number | null>(null);
-  const [isClientInitialized, setIsClientInitialized] = useState<boolean>(false);
 
   const MAX_DURATION = 45; // 45 seconds
 
   // Initialize the ElevenLabs client
   useEffect(() => {
+    let isMounted = true;
+    
     const initializeClient = async () => {
       try {
+        console.log("Initializing ElevenLabs client...");
         const apiKey = await getElevenLabsApiKey();
-        client = new ElevenLabsClient({
-          apiKey: apiKey,
+        
+        console.log("API key retrieved successfully");
+        if (!apiKey) {
+          throw new Error("API key is empty");
+        }
+        
+        const client = new ElevenLabsClient({
+          apiKey,
         });
-        setIsClientInitialized(true);
+        
+        if (isMounted) {
+          setElevenLabsClient(client);
+          setIsClientInitialized(true);
+          console.log("ElevenLabs client initialized successfully");
+        }
       } catch (error) {
         console.error("Error initializing ElevenLabs client:", error);
-        toast({
-          title: "Error",
-          description: "Failed to initialize speech-to-text service. Please try again later.",
-          variant: "destructive",
-        });
+        if (isMounted) {
+          toast({
+            title: "Error",
+            description: "Failed to initialize speech-to-text service. Please try again later.",
+            variant: "destructive",
+          });
+        }
       }
     };
 
     initializeClient();
+    
+    return () => {
+      isMounted = false;
+    };
   }, [toast]);
 
   // Request camera and microphone permissions
@@ -217,7 +234,7 @@ export default function Record() {
       return;
     }
     
-    if (!client || !isClientInitialized) {
+    if (!elevenLabsClient || !isClientInitialized) {
       toast({
         title: "Service not ready",
         description: "Speech-to-text service is not initialized. Please try again later.",
@@ -248,7 +265,8 @@ export default function Record() {
 
       // Convert to audio file for ElevenLabs
       try {
-        const transcription = await client.speechToText.convert({
+        console.log("Starting transcription process...");
+        const transcription = await elevenLabsClient.speechToText.convert({
           file: videoFile,
           model_id: "scribe_v1",
         });
@@ -310,7 +328,6 @@ export default function Record() {
     }
   };
 
-  // Modify the playRecording function
   const playRecording = () => {
     if (videoRef.current && videoBlob) {
       // Stop current playback and remove existing source
@@ -342,7 +359,6 @@ export default function Record() {
     }
   };
 
-  // Add cleanup for video source in the cleanup effect
   useEffect(() => {
     return () => {
       if (videoRef.current && videoRef.current.src) {
@@ -371,7 +387,6 @@ export default function Record() {
       
       <Card className="mb-8">
         <CardContent className="p-6 flex flex-col items-center">
-          {/* Video Preview */}
           <div className="relative w-full aspect-video bg-black rounded-lg overflow-hidden mb-6">
             {!permission && (
               <div className="absolute inset-0 flex flex-col items-center justify-center text-white bg-black/90">
@@ -418,7 +433,6 @@ export default function Record() {
             )}
           </div>
           
-          {/* Add upload progress bar */}
           {uploadProgress > 0 && (
             <div className="w-full mb-6">
               <div className="flex justify-between mb-2">
@@ -429,7 +443,6 @@ export default function Record() {
             </div> 
           )}
           
-          {/* Timer and Progress */}
           <div className="w-full mb-6">
             <div className="flex justify-between mb-2">
               <div className="flex items-center">
@@ -443,7 +456,6 @@ export default function Record() {
             <Progress value={(elapsedTime / MAX_DURATION) * 100} className="h-2" />
           </div>
           
-          {/* Recording Controls */}
           <div className="flex flex-wrap gap-4 justify-center">
             {!recording && !videoBlob && (
               <Button 
