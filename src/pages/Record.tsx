@@ -34,6 +34,15 @@ export default function Record() {
     const initializeClient = async () => {
       try {
         const apiKey = await getElevenLabsApiKey();
+        if (!apiKey) {
+          toast({
+            title: "Configuration Error",
+            description: "ElevenLabs API key is missing. Please add it in your Supabase settings.",
+            variant: "destructive",
+          });
+          return;
+        }
+        
         const client = new ElevenLabsClient({
           apiKey: apiKey,
         });
@@ -42,7 +51,7 @@ export default function Record() {
         console.error("Error initializing ElevenLabs client:", error);
         toast({
           title: "Error",
-          description: "Failed to initialize speech-to-text service. Please try again later.",
+          description: "Failed to initialize speech-to-text service. Please make sure the API key is configured correctly.",
           variant: "destructive",
         });
       }

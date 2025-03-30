@@ -46,7 +46,6 @@ export default function Analysis() {
   const [analysis, setAnalysis] = useState<SpeechAnalysisResult | null>(null);
   const [elevenLabsClient, setElevenLabsClient] = useState<ElevenLabsClient | null>(null);
   
-  // Add state for active tab
   const [activeTab, setActiveTab] = useState<string>("transcript");
   
   const [isPlaying, setIsPlaying] = useState<boolean>(false);
@@ -59,14 +58,21 @@ export default function Analysis() {
   
   const [originalFile, setOriginalFile] = useState<File | null>(null);
   
-  // Add this state to store the recording data
   const [recordingData, setRecordingData] = useState<any>(null);
   
-  // Initialize ElevenLabsClient
   useEffect(() => {
     const initializeClient = async () => {
       try {
         const apiKey = await getElevenLabsApiKey();
+        if (!apiKey) {
+          toast({
+            title: "Configuration Error",
+            description: "ElevenLabs API key is missing. Please add it in your Supabase settings.",
+            variant: "destructive",
+          });
+          return;
+        }
+        
         const client = new ElevenLabsClient({
           apiKey: apiKey,
         });
@@ -75,7 +81,7 @@ export default function Analysis() {
         console.error("Error initializing ElevenLabs client:", error);
         toast({
           title: "Error",
-          description: "Failed to initialize speech-to-text service. Please try again later.",
+          description: "Failed to initialize speech-to-text service. Please make sure the API key is configured correctly.",
           variant: "destructive",
         });
       }
@@ -84,31 +90,26 @@ export default function Analysis() {
     initializeClient();
   }, [toast]);
   
-  // Update the initial useEffect to get recording data
   useEffect(() => {
     const fetchRecordingData = async () => {
       try {
-        // Try to get data from localStorage first
         const storedData = localStorage.getItem('recordingData');
         let data;
         
         if (storedData) {
           data = JSON.parse(storedData);
         } else if (location.state) {
-          // Fallback to location state if localStorage is empty
           data = location.state;
-          // Store it in localStorage for future use
           localStorage.setItem('recordingData', JSON.stringify(data));
         }
 
         if (data) {
           setRecordingData(data);
-          // Set the recording with the data
           setRecording({
             id: data.id,
             title: data.fileName,
             date: new Date().toISOString(),
-            duration: 0, // You might want to calculate this
+            duration: 0,
             videoUrl: data.blobUrl,
             audioUrl: data.blobUrl
           });
@@ -128,7 +129,6 @@ export default function Analysis() {
     fetchRecordingData();
   }, [id, location.state, toast]);
   
-  // Add cleanup for preview URL when component unmounts
   useEffect(() => {
     return () => {
       const storedData = localStorage.getItem('recordingData');
@@ -163,7 +163,6 @@ export default function Analysis() {
     setIsTranscribing(true);
     
     try {
-      // Fetch the file from the blob URL
       const response = await fetch(recordingData.blobUrl);
       const blob = await response.blob();
       
@@ -176,7 +175,6 @@ export default function Analysis() {
         model_id: "scribe_v1",
       });
 
-      // Get the video duration
       const video = document.createElement('video');
       video.src = recordingData.blobUrl;
       await new Promise(resolve => {
@@ -184,8 +182,7 @@ export default function Analysis() {
       });
       const duration = Math.floor(video.duration);
 
-      // Create segments for every 10 seconds
-      const segmentLength = 10; // 10 seconds per segment
+      const segmentLength = 10;
       const numberOfSegments = Math.ceil(duration / segmentLength);
       const wordsArray = transcription.text.split(' ');
       const wordsPerSegment = Math.ceil(wordsArray.length / numberOfSegments);
@@ -194,7 +191,6 @@ export default function Analysis() {
         const start = index * segmentLength;
         const end = Math.min((index + 1) * segmentLength, duration);
         
-        // Get words for this segment
         const startWord = index * wordsPerSegment;
         const endWord = Math.min((index + 1) * wordsPerSegment, wordsArray.length);
         const segmentText = wordsArray.slice(startWord, endWord).join(' ');
@@ -203,7 +199,7 @@ export default function Analysis() {
           text: segmentText,
           start: start,
           end: end,
-          confidence: 0.9 // Default confidence value
+          confidence: 0.9
         };
       });
 
@@ -251,11 +247,9 @@ export default function Analysis() {
     setIsAnalyzing(true);
     
     try {
-      // Use the new Claude service instead of the mock API
       const result = await analyzeTranscriptWithClaude(transcript.text);
       setAnalysis(result);
       
-      // Set the active tab to analysis when analysis is complete
       setActiveTab("analysis");
       
       toast({
@@ -322,14 +316,12 @@ export default function Analysis() {
           </div>
           
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-            {/* Video/Audio Player Section */}
             <div className="lg:col-span-2">
               <Card className="mb-8">
                 <CardHeader className="pb-0">
                   <CardTitle>Recording Playback</CardTitle>
                 </CardHeader>
                 <CardContent>
-                  {/* Video Player */}
                   <div className="aspect-video bg-black rounded-md overflow-hidden mb-4">
                     {recording.videoUrl ? (
                       <video
@@ -337,12 +329,11 @@ export default function Analysis() {
                         className="w-full h-full"
                         controls
                         playsInline
-                        // These props would be controlled in a real implementation
-                        // muted={isMuted}
-                        // onTimeUpdate={(e) => setCurrentTime(e.currentTarget.currentTime)}
-                        // onLoadedMetadata={(e) => setDuration(e.currentTarget.duration)}
-                        // onPlay={() => setIsPlaying(true)}
-                        // onPause={() => setIsPlaying(false)}
+                        muted={isMuted}
+                        onTimeUpdate={(e) => setCurrentTime(e.currentTarget.currentTime)}
+                        onLoadedMetadata={(e) => setDuration(e.currentTarget.duration)}
+                        onPlay={() => setIsPlaying(true)}
+                        onPause={() => setIsPlaying(false)}
                       />
                     ) : (
                       <div className="w-full h-full flex items-center justify-center bg-muted">
@@ -351,7 +342,6 @@ export default function Analysis() {
                     )}
                   </div>
                   
-                  {/* Custom Controls - These would be functional in a real implementation */}
                   <div className="flex flex-col space-y-2">
                     <div className="flex justify-between text-sm text-muted-foreground">
                       <span>{formatTime(currentTime)}</span>
@@ -376,7 +366,6 @@ export default function Analysis() {
                         </Button>
                       </div>
                       <div className="flex items-center space-x-2">
-                        {/* Placeholder for additional controls */}
                         <div className="w-8"></div>
                       </div>
                     </div>
@@ -384,7 +373,6 @@ export default function Analysis() {
                 </CardContent>
               </Card>
               
-              {/* Tabs for Transcript and Analysis */}
               <Tabs value={activeTab} onValueChange={setActiveTab} className="mb-8">
                 <TabsList className="grid grid-cols-2">
                   <TabsTrigger value="transcript" className="flex items-center gap-2">
@@ -460,7 +448,6 @@ export default function Analysis() {
                 <TabsContent value="analysis" className="p-4 border rounded-md mt-2">
                   {analysis ? (
                     <div className="space-y-6">
-                      {/* Overall Score */}
                       <div className="flex flex-col items-center py-4">
                         <div className="relative">
                           <svg className="w-32 h-32">
@@ -492,7 +479,6 @@ export default function Analysis() {
                         <p className="mt-2 font-semibold text-lg">Overall Score</p>
                       </div>
                       
-                      {/* Metrics Grid */}
                       <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
                         <Card>
                           <CardContent className="p-4 text-center">
@@ -558,9 +544,7 @@ export default function Analysis() {
                         </Card>
                       </div>
                       
-                      {/* Details Accordion */}
                       <Accordion type="multiple" className="mt-8">
-                        {/* Filler Words Analysis */}
                         <AccordionItem value="filler-words">
                           <AccordionTrigger>Filler Words</AccordionTrigger>
                           <AccordionContent>
@@ -588,7 +572,6 @@ export default function Analysis() {
                           </AccordionContent>
                         </AccordionItem>
                         
-                        {/* Grammar Issues */}
                         <AccordionItem value="grammar-issues">
                           <AccordionTrigger>Grammar Suggestions</AccordionTrigger>
                           <AccordionContent>
@@ -621,7 +604,6 @@ export default function Analysis() {
                           </AccordionContent>
                         </AccordionItem>
                         
-                        {/* Body Language Analysis - Only shown if available */}
                         {analysis.bodyLanguage && (
                           <AccordionItem value="body-language">
                             <AccordionTrigger>Body Language</AccordionTrigger>
@@ -677,7 +659,6 @@ export default function Analysis() {
                         )}
                       </Accordion>
                       
-                      {/* AI Feedback */}
                       <Card className="mt-8">
                         <CardHeader className="pb-3">
                           <CardTitle className="flex items-center gap-2">
@@ -728,7 +709,6 @@ export default function Analysis() {
               </Tabs>
             </div>
             
-            {/* Analysis Summary Sidebar */}
             <div>
               <Card className="sticky top-4">
                 <CardHeader>

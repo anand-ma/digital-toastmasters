@@ -25,4 +25,3 @@ export async function getElevenLabsApiKey(): Promise<string> {
     throw new Error('Failed to retrieve ElevenLabs API key');
   }
 }
-
