@@ -35,6 +35,10 @@ import {
   AccordionTrigger,
 } from "@/components/ui/accordion";
 import { ElevenLabsClient } from 'elevenlabs';
+import { getElevenLabsApiKey } from '@/services/elevenlabs';
+
+// Initialize the ElevenLabs client with state
+let client: ElevenLabsClient | null = null;
 
 export default function Analysis() {
   const { id } = useParams<{ id: string }>();
@@ -60,6 +64,29 @@ export default function Analysis() {
   
   // Add this state to store the recording data
   const [recordingData, setRecordingData] = useState<any>(null);
+  const [isClientInitialized, setIsClientInitialized] = useState<boolean>(false);
+
+  // Initialize the ElevenLabs client
+  useEffect(() => {
+    const initializeClient = async () => {
+      try {
+        const apiKey = await getElevenLabsApiKey();
+        client = new ElevenLabsClient({
+          apiKey: apiKey,
+        });
+        setIsClientInitialized(true);
+      } catch (error) {
+        console.error("Error initializing ElevenLabs client:", error);
+        toast({
+          title: "Error",
+          description: "Failed to initialize speech-to-text service. Please try again later.",
+          variant: "destructive",
+        });
+      }
+    };
+
+    initializeClient();
+  }, [toast]);
   
   // Update the initial useEffect to get recording data
   useEffect(() => {
@@ -128,13 +155,18 @@ export default function Analysis() {
       return;
     }
     
+    if (!client || !isClientInitialized) {
+      toast({
+        title: "Service not ready",
+        description: "Speech-to-text service is not initialized. Please try again later.",
+        variant: "destructive",
+      });
+      return;
+    }
+    
     setIsTranscribing(true);
     
     try {
-      const client = new ElevenLabsClient({
-        apiKey: "sk_b28a30dd43efe6a7c4f107d8a7536d5573e3161c1c2104aa",
-      });
-
       // Fetch the file from the blob URL
       const response = await fetch(recordingData.blobUrl);
       const blob = await response.blob();

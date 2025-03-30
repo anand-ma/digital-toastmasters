@@ -1,3 +1,4 @@
+
 import { useState, useRef, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { Play, Pause, RefreshCw, StopCircle, Clock, MicOff, Mic, FileVideo } from "lucide-react";
@@ -7,11 +8,10 @@ import { Progress } from "@/components/ui/progress";
 import { useToast } from "@/components/ui/use-toast";
 import { processRecording } from "@/services/api";
 import { ElevenLabsClient } from 'elevenlabs';
+import { getElevenLabsApiKey } from '@/services/elevenlabs';
 
-// Initialize the ElevenLabs client outside the component
-const client = new ElevenLabsClient({
-  apiKey: "sk_b28a30dd43efe6a7c4f107d8a7536d5573e3161c1c2104aa",
-});
+// Initialize the ElevenLabs client with state for the API key
+let client: ElevenLabsClient | null = null;
 
 export default function Record() {
   const navigate = useNavigate();
@@ -28,8 +28,31 @@ export default function Record() {
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<BlobPart[]>([]);
   const timerIntervalRef = useRef<number | null>(null);
+  const [isClientInitialized, setIsClientInitialized] = useState<boolean>(false);
 
   const MAX_DURATION = 45; // 45 seconds
+
+  // Initialize the ElevenLabs client
+  useEffect(() => {
+    const initializeClient = async () => {
+      try {
+        const apiKey = await getElevenLabsApiKey();
+        client = new ElevenLabsClient({
+          apiKey: apiKey,
+        });
+        setIsClientInitialized(true);
+      } catch (error) {
+        console.error("Error initializing ElevenLabs client:", error);
+        toast({
+          title: "Error",
+          description: "Failed to initialize speech-to-text service. Please try again later.",
+          variant: "destructive",
+        });
+      }
+    };
+
+    initializeClient();
+  }, [toast]);
 
   // Request camera and microphone permissions
   useEffect(() => {
@@ -189,6 +212,15 @@ export default function Record() {
       toast({
         title: "No recording available",
         description: "Please record your speech before processing.",
+        variant: "destructive",
+      });
+      return;
+    }
+    
+    if (!client || !isClientInitialized) {
+      toast({
+        title: "Service not ready",
+        description: "Speech-to-text service is not initialized. Please try again later.",
         variant: "destructive",
       });
       return;
