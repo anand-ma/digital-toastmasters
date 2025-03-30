@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from "react";
 import { useParams, useLocation } from "react-router-dom";
 import { 
@@ -300,7 +299,7 @@ export default function Analysis() {
             <div className="lg:col-span-2">
               <Card className="mb-8">
                 <CardHeader className="pb-0">
-                  <CardTitle>Recording Playback</CardTitle>
+                  <CardTitle className="mb-4">Video Playback</CardTitle>
                 </CardHeader>
                 <CardContent>
                   {/* Video Player */}
