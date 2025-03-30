@@ -1,4 +1,3 @@
-
 import { supabase } from '@/integrations/supabase/client';
 import type { SpeechAnalysisResult } from './api';
 
@@ -13,13 +12,17 @@ async function getAnthropicApiKey(): Promise<string> {
     
     if (error) {
       console.error('Error fetching Anthropic API key:', error);
-      throw new Error('Failed to fetch API key');
+      throw new Error(`Failed to fetch API key: ${error.message}`);
+    }
+    
+    if (!data || !data.value) {
+      throw new Error('Anthropic API key not found in database');
     }
     
     return data.value;
   } catch (error) {
     console.error('Error in getAnthropicApiKey:', error);
-    throw new Error('Failed to retrieve Anthropic API key');
+    throw new Error(`Failed to retrieve Anthropic API key: ${error.message}`);
   }
 }
 
@@ -144,7 +147,7 @@ export async function analyzeTranscriptWithClaude(transcript: string): Promise<S
         eyeContact: 75,
       },
       overallScore: 75,
-      feedback: "We were unable to provide a detailed analysis. Please try again later."
+      feedback: `We were unable to provide a detailed analysis. Error: ${error.message}`
     };
   }
 }

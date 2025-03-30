@@ -34,7 +34,7 @@ import {
   AccordionTrigger,
 } from "@/components/ui/accordion";
 import { ElevenLabsClient } from 'elevenlabs';
-import { getElevenLabsApiKey } from "@/services/elevenlabs";
+import { getElevenLabsApiKey, isElevenLabsConfigured } from "@/services/elevenlabs";
 
 export default function Analysis() {
   const { id } = useParams<{ id: string }>();
@@ -63,25 +63,33 @@ export default function Analysis() {
   useEffect(() => {
     const initializeClient = async () => {
       try {
-        const apiKey = await getElevenLabsApiKey();
-        if (!apiKey) {
+        const isConfigured = await isElevenLabsConfigured();
+        
+        if (!isConfigured) {
           toast({
             title: "Configuration Error",
-            description: "ElevenLabs API key is missing. Please add it in your Supabase settings.",
+            description: "ElevenLabs API key is missing or invalid. Please check your Supabase settings.",
             variant: "destructive",
           });
           return;
         }
         
+        const apiKey = await getElevenLabsApiKey();
         const client = new ElevenLabsClient({
           apiKey: apiKey,
         });
+        
+        if (!client) {
+          throw new Error("Failed to initialize ElevenLabs client");
+        }
+        
         setElevenLabsClient(client);
+        console.log("ElevenLabs client initialized successfully");
       } catch (error) {
         console.error("Error initializing ElevenLabs client:", error);
         toast({
-          title: "Error",
-          description: "Failed to initialize speech-to-text service. Please make sure the API key is configured correctly.",
+          title: "Speech-to-Text Service Error",
+          description: `Failed to initialize the speech-to-text service: ${error.message}`,
           variant: "destructive",
         });
       }
@@ -153,8 +161,8 @@ export default function Analysis() {
 
     if (!elevenLabsClient) {
       toast({
-        title: "Service not ready",
-        description: "Speech-to-text service is not ready. Please try again later.",
+        title: "Speech-to-Text Service Error",
+        description: "The speech-to-text service is not ready. Please check if your API key is valid and try again later.",
         variant: "destructive",
       });
       return;
