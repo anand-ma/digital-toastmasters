@@ -1,4 +1,3 @@
-
 import { useState, useEffect } from "react";
 import { useParams, useLocation } from "react-router-dom";
 import { 
@@ -35,6 +34,7 @@ import {
   AccordionTrigger,
 } from "@/components/ui/accordion";
 import { ElevenLabsClient } from 'elevenlabs';
+import { getElevenLabsApiKey } from "@/services/elevenlabs";
 
 export default function Analysis() {
   const { id } = useParams<{ id: string }>();
@@ -44,6 +44,7 @@ export default function Analysis() {
   const [recording, setRecording] = useState<Recording | null>(null);
   const [transcript, setTranscript] = useState<Transcript | null>(null);
   const [analysis, setAnalysis] = useState<SpeechAnalysisResult | null>(null);
+  const [elevenLabsClient, setElevenLabsClient] = useState<ElevenLabsClient | null>(null);
   
   // Add state for active tab
   const [activeTab, setActiveTab] = useState<string>("transcript");
@@ -60,6 +61,28 @@ export default function Analysis() {
   
   // Add this state to store the recording data
   const [recordingData, setRecordingData] = useState<any>(null);
+  
+  // Initialize ElevenLabsClient
+  useEffect(() => {
+    const initializeClient = async () => {
+      try {
+        const apiKey = await getElevenLabsApiKey();
+        const client = new ElevenLabsClient({
+          apiKey: apiKey,
+        });
+        setElevenLabsClient(client);
+      } catch (error) {
+        console.error("Error initializing ElevenLabs client:", error);
+        toast({
+          title: "Error",
+          description: "Failed to initialize speech-to-text service. Please try again later.",
+          variant: "destructive",
+        });
+      }
+    };
+    
+    initializeClient();
+  }, [toast]);
   
   // Update the initial useEffect to get recording data
   useEffect(() => {
@@ -127,14 +150,19 @@ export default function Analysis() {
       });
       return;
     }
+
+    if (!elevenLabsClient) {
+      toast({
+        title: "Service not ready",
+        description: "Speech-to-text service is not ready. Please try again later.",
+        variant: "destructive",
+      });
+      return;
+    }
     
     setIsTranscribing(true);
     
     try {
-      const client = new ElevenLabsClient({
-        apiKey: "sk_b28a30dd43efe6a7c4f107d8a7536d5573e3161c1c2104aa",
-      });
-
       // Fetch the file from the blob URL
       const response = await fetch(recordingData.blobUrl);
       const blob = await response.blob();
@@ -143,7 +171,7 @@ export default function Analysis() {
         type: recordingData.fileType
       });
 
-      const transcription = await client.speechToText.convert({
+      const transcription = await elevenLabsClient.speechToText.convert({
         file: audioFile,
         model_id: "scribe_v1",
       });
@@ -202,7 +230,6 @@ export default function Analysis() {
     }
   };
   
-  // Add this function to handle segment click
   const handleSegmentClick = (startTime: number) => {
     const videoElement = document.querySelector('video');
     if (videoElement) {
@@ -275,7 +302,6 @@ export default function Analysis() {
     return "text-red-500";
   };
   
-  // Add cleanup for blob URLs
   useEffect(() => {
     return () => {
       if (recordingData?.blobUrl) {
