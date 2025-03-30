@@ -1,4 +1,21 @@
-# Welcome to your Lovable project
+# Digital Toastmasters
+
+Digital Toastmasters is an AI-powered public speaking coach that helps you improve your presentation skills through detailed analysis and feedback.
+
+## Project Description
+
+Digital Toastmasters allows users to:
+- Upload pre-recorded videos or record directly in the browser
+- Receive comprehensive analysis of your speaking performance including:
+  - Confidence level measurement
+  - "Ah" and filler word counter
+  - Grammar and language analysis
+  - Speech pacing and timing feedback
+  - Body language and posture assessment
+  - Eye contact evaluation
+  - Gesture effectiveness
+
+The platform uses advanced AI to provide actionable feedback to help you become a more polished and confident speaker.
 
 ## Project info
 
@@ -52,13 +69,22 @@ npm run dev
 
 ## What technologies are used for this project?
 
-This project is built with .
+This project is built with a modern tech stack:
 
-- Vite
-- TypeScript
-- React
-- shadcn-ui
-- Tailwind CSS
+### Frontend
+- **Framework:** [![React](https://img.shields.io/badge/React-61DAFB?style=for-the-badge&logo=react&logoColor=black)](https://react.dev/)
+- **Language:** [![TypeScript](https://img.shields.io/badge/TypeScript-3178C6?style=for-the-badge&logo=typescript&logoColor=white)](https://www.typescriptlang.org/)
+- **Build Tool:** [![Vite](https://img.shields.io/badge/Vite-646CFF?style=for-the-badge&logo=vite&logoColor=white)](https://vitejs.dev/)
+- **Styling:** [![Tailwind CSS](https://img.shields.io/badge/Tailwind_CSS-06B6D4?style=for-the-badge&logo=tailwind-css&logoColor=white)](https://tailwindcss.com/)
+- **UI Components:** [![Shadcn](https://img.shields.io/badge/Shadcn-000000?style=for-the-badge&logo=shadcn&logoColor=white)](https://ui.shadcn.com/)
+
+### Backend & Infrastructure
+- **Database & Auth:** [![Supabase](https://img.shields.io/badge/Supabase-3ECF8E?style=for-the-badge&logo=supabase&logoColor=white)](https://supabase.com/)
+- **Development & Hosting:** [![Lovable](https://img.shields.io/badge/Lovable-FF6B6B?style=for-the-badge&logo=lovable&logoColor=white)](https://lovable.dev/)
+
+### AI & Media Processing
+- **Audio/Video Analysis:** [![ElevenLabs](https://img.shields.io/badge/ElevenLabs-5B21B6?style=for-the-badge&logo=elevenlabs&logoColor=white)](https://elevenlabs.io/)
+- **Text Analysis:** [![Claude AI](https://img.shields.io/badge/Claude_AI-7C3AED?style=for-the-badge&logo=anthropic&logoColor=white)](https://www.anthropic.com/claude)
 
 ## How can I deploy this project?
 
