@@ -1,4 +1,6 @@
+
 // Mock data and API service interfaces
+import { supabase } from '@/integrations/supabase/client';
 
 // Speech analysis result type
 export interface SpeechAnalysisResult {
