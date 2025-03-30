@@ -1,5 +1,5 @@
 
-import { supabase } from '@/lib/supabase';
+import { supabase } from '@/integrations/supabase/client';
 import type { SpeechAnalysisResult } from './api';
 
 // Function to fetch the API key from Supabase
