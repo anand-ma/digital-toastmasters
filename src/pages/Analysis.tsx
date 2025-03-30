@@ -34,7 +34,7 @@ import {
   AccordionTrigger,
 } from "@/components/ui/accordion";
 import { ElevenLabsClient } from 'elevenlabs';
-import { getElevenLabsApiKey, isElevenLabsConfigured } from "@/services/elevenlabs";
+import { getElevenLabsApiKey, isElevenLabsConfigured, handleElevenLabsError } from "@/services/elevenlabs";
 
 export default function Analysis() {
   const { id } = useParams<{ id: string }>();
