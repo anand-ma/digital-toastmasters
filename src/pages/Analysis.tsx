@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from "react";
 import { useParams, useLocation } from "react-router-dom";
 import { 
@@ -22,11 +23,11 @@ import { useToast } from "@/components/ui/use-toast";
 import { 
   processRecording, 
   transcribeAudio, 
-  analyzeTranscript,
   type Recording,
   type Transcript,
   type SpeechAnalysisResult
 } from "@/services/api";
+import { analyzeTranscriptWithClaude } from "@/services/claude";
 import {
   Accordion,
   AccordionContent,
@@ -223,7 +224,8 @@ export default function Analysis() {
     setIsAnalyzing(true);
     
     try {
-      const result = await analyzeTranscript(transcript.text);
+      // Use the new Claude service instead of the mock API
+      const result = await analyzeTranscriptWithClaude(transcript.text);
       setAnalysis(result);
       
       // Set the active tab to analysis when analysis is complete
@@ -237,7 +239,7 @@ export default function Analysis() {
       console.error("Error analyzing transcript:", error);
       toast({
         title: "Analysis failed",
-        description: "Failed to analyze your speech. Please try again.",
+        description: `Failed to analyze your speech: ${error.message}`,
         variant: "destructive",
       });
     } finally {
