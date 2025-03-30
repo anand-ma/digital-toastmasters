@@ -1,5 +1,6 @@
 
 import { supabase } from '@/integrations/supabase/client';
+import { toast } from '@/components/ui/use-toast';
 
 // Function to fetch the ElevenLabs API key from Supabase
 export async function getElevenLabsApiKey(): Promise<string> {
@@ -41,9 +42,32 @@ export async function isElevenLabsConfigured(): Promise<boolean> {
       return false;
     }
     
-    return data && data.value && data.value.length > 0;
+    // Ensure the API key actually has a value
+    if (!data || !data.value || data.value === 'YOUR_ELEVENLABS_API_KEY_HERE') {
+      console.error('ElevenLabs API key is missing or set to placeholder value');
+      return false;
+    }
+    
+    return data.value.length > 0;
   } catch (error) {
     console.error('ElevenLabs API is not configured:', error);
     return false;
   }
+}
+
+// Helper function to handle transcription errors with meaningful messages
+export function handleElevenLabsError(error: any): string {
+  if (typeof error === 'object' && error !== null) {
+    if (error.message) {
+      if (error.message.includes('API key')) {
+        return 'Invalid ElevenLabs API key. Please check your API key in Supabase settings.';
+      }
+      if (error.message.includes('rate limit')) {
+        return 'ElevenLabs rate limit reached. Please try again later.';
+      }
+      return error.message;
+    }
+  }
+  
+  return 'An unknown error occurred with the ElevenLabs service.';
 }

@@ -45,6 +45,7 @@ export default function Analysis() {
   const [transcript, setTranscript] = useState<Transcript | null>(null);
   const [analysis, setAnalysis] = useState<SpeechAnalysisResult | null>(null);
   const [elevenLabsClient, setElevenLabsClient] = useState<ElevenLabsClient | null>(null);
+  const [elevenLabsError, setElevenLabsError] = useState<string | null>(null);
   
   const [activeTab, setActiveTab] = useState<string>("transcript");
   
@@ -66,6 +67,7 @@ export default function Analysis() {
         const isConfigured = await isElevenLabsConfigured();
         
         if (!isConfigured) {
+          setElevenLabsError('ElevenLabs API key is missing or invalid');
           toast({
             title: "Configuration Error",
             description: "ElevenLabs API key is missing or invalid. Please check your Supabase settings.",
@@ -74,22 +76,41 @@ export default function Analysis() {
           return;
         }
         
-        const apiKey = await getElevenLabsApiKey();
-        const client = new ElevenLabsClient({
-          apiKey: apiKey,
-        });
-        
-        if (!client) {
-          throw new Error("Failed to initialize ElevenLabs client");
+        try {
+          const apiKey = await getElevenLabsApiKey();
+          
+          if (!apiKey || apiKey === 'YOUR_ELEVENLABS_API_KEY_HERE') {
+            setElevenLabsError('Invalid API key configuration');
+            toast({
+              title: "API Key Error",
+              description: "Your ElevenLabs API key appears to be invalid or is still set to the default value.",
+              variant: "destructive",
+            });
+            return;
+          }
+          
+          const client = new ElevenLabsClient({
+            apiKey: apiKey,
+          });
+          
+          setElevenLabsClient(client);
+          setElevenLabsError(null);
+          console.log("ElevenLabs client initialized successfully");
+        } catch (clientError) {
+          console.error("Error creating ElevenLabs client:", clientError);
+          setElevenLabsError('Failed to initialize ElevenLabs client');
+          toast({
+            title: "Client Error",
+            description: `Failed to initialize the ElevenLabs client: ${clientError instanceof Error ? clientError.message : String(clientError)}`,
+            variant: "destructive",
+          });
         }
-        
-        setElevenLabsClient(client);
-        console.log("ElevenLabs client initialized successfully");
-      } catch (error) {
-        console.error("Error initializing ElevenLabs client:", error);
+      } catch (configError) {
+        console.error("Error checking ElevenLabs configuration:", configError);
+        setElevenLabsError('Failed to check ElevenLabs configuration');
         toast({
-          title: "Speech-to-Text Service Error",
-          description: `Failed to initialize the speech-to-text service: ${error.message}`,
+          title: "Configuration Error",
+          description: `Failed to check ElevenLabs configuration: ${configError instanceof Error ? configError.message : String(configError)}`,
           variant: "destructive",
         });
       }
@@ -162,7 +183,7 @@ export default function Analysis() {
     if (!elevenLabsClient) {
       toast({
         title: "Speech-to-Text Service Error",
-        description: "The speech-to-text service is not ready. Please check if your API key is valid and try again later.",
+        description: elevenLabsError || "The speech-to-text service is not ready. Please check if your API key is valid and try again later.",
         variant: "destructive",
       });
       return;
@@ -178,10 +199,14 @@ export default function Analysis() {
         type: recordingData.fileType
       });
 
+      console.log("Starting transcription with file:", audioFile.name, audioFile.type, audioFile.size);
+      
       const transcription = await elevenLabsClient.speechToText.convert({
         file: audioFile,
         model_id: "scribe_v1",
       });
+
+      console.log("Transcription successful:", transcription);
 
       const video = document.createElement('video');
       video.src = recordingData.blobUrl;
@@ -224,9 +249,11 @@ export default function Analysis() {
       });
     } catch (error) {
       console.error("Error transcribing audio:", error);
+      const errorMessage = handleElevenLabsError(error);
+      
       toast({
         title: "Transcription failed",
-        description: `Failed to transcribe: ${error.message}`,
+        description: errorMessage,
         variant: "destructive",
       });
     } finally {
