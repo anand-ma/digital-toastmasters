@@ -10,7 +10,7 @@ import { ElevenLabsClient } from 'elevenlabs';
 
 // Initialize the ElevenLabs client outside the component
 const client = new ElevenLabsClient({
-  apiKey: "sk_9328d32cef578d0c0a389b26b851365e3925338261f49cd6",
+  apiKey: "sk_aced6ef754c079cdea32e61054f89ae53956fb39ee3a087a",
 });
 
 export default function Record() {

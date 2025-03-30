@@ -131,7 +131,7 @@ export default function Analysis() {
     
     try {
       const client = new ElevenLabsClient({
-        apiKey: "sk_9328d32cef578d0c0a389b26b851365e3925338261f49cd6",
+        apiKey: "sk_aced6ef754c079cdea32e61054f89ae53956fb39ee3a087a",
       });
 
       // Fetch the file from the blob URL
