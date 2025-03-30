@@ -1,3 +1,4 @@
+
 // Mock data and API service interfaces
 
 // Speech analysis result type
@@ -41,40 +42,6 @@ export interface Recording {
   audioUrl?: string;
   transcript?: Transcript;
   analysis?: SpeechAnalysisResult;
-}
-
-// Mock function to process a recording
-export async function processRecording(file: File): Promise<Recording> {
-  // Simulate API call delay
-  await new Promise(resolve => setTimeout(resolve, 2000));
-  
-  // Generate a mock recording response
-  return {
-    id: Math.random().toString(36).substring(2, 15),
-    title: file.name.split(".")[0] || "Untitled Recording",
-    date: new Date().toISOString(),
-    duration: 45, // Assuming 45 seconds for all recordings
-    videoUrl: URL.createObjectURL(file),
-    audioUrl: URL.createObjectURL(file),
-  };
-}
-
-// Mock function to transcribe audio
-export async function transcribeAudio(recordingId: string): Promise<Transcript> {
-  // Simulate API call delay
-  await new Promise(resolve => setTimeout(resolve, 3000));
-  
-  // Return mock transcript data
-  return {
-    segments: [
-      { start: 0, end: 5.2, text: "Hello, my name is Sarah and today I'm going to talk about artificial intelligence.", confidence: 0.95 },
-      { start: 5.4, end: 11.8, text: "Um, AI has transformed many industries, like, you know, healthcare and education.", confidence: 0.88 },
-      { start: 12.0, end: 20.5, text: "One of the most significant advantages of AI is its ability to process large amounts of data quickly and identify patterns.", confidence: 0.92 },
-      { start: 21.0, end: 28.3, text: "However, there are also concerns about, um, privacy and ethical considerations that we need to address.", confidence: 0.85 },
-      { start: 28.5, end: 45.0, text: "In conclusion, AI offers tremendous benefits but requires careful implementation with proper oversight to ensure it serves humanity's best interests. Thank you for your attention.", confidence: 0.93 },
-    ],
-    text: "Hello, my name is Sarah and today I'm going to talk about artificial intelligence. Um, AI has transformed many industries, like, you know, healthcare and education. One of the most significant advantages of AI is its ability to process large amounts of data quickly and identify patterns. However, there are also concerns about, um, privacy and ethical considerations that we need to address. In conclusion, AI offers tremendous benefits but requires careful implementation with proper oversight to ensure it serves humanity's best interests. Thank you for your attention."
-  };
 }
 
 // Updated function to analyze a transcript using Anthropic Claude API
@@ -127,7 +94,7 @@ export async function analyzeTranscript(transcript: string): Promise<SpeechAnaly
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'x-api-key': 'YOUR_ANTHROPIC_API_KEY', // This should be replaced with an environment variable
+        'x-api-key': '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',
         'anthropic-version': '2023-06-01'
       },
       body: JSON.stringify({
