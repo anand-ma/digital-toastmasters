@@ -1,10 +1,33 @@
 
+import { supabase } from '@/lib/supabase';
 import type { SpeechAnalysisResult } from './api';
 
-const ANTHROPIC_API_KEY = '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';
+// Function to fetch the API key from Supabase
+async function getAnthropicApiKey(): Promise<string> {
+  try {
+    const { data, error } = await supabase
+      .from('api_keys')
+      .select('value')
+      .eq('name', 'anthropic_api_key')
+      .single();
+    
+    if (error) {
+      console.error('Error fetching Anthropic API key:', error);
+      throw new Error('Failed to fetch API key');
+    }
+    
+    return data.value;
+  } catch (error) {
+    console.error('Error in getAnthropicApiKey:', error);
+    throw new Error('Failed to retrieve Anthropic API key');
+  }
+}
 
 export async function analyzeTranscriptWithClaude(transcript: string): Promise<SpeechAnalysisResult> {
   try {
+    // Get the API key from Supabase
+    const apiKey = await getAnthropicApiKey();
+    
     // Define the prompt for Claude
     const prompt = `
       Please analyze this speech transcript and provide feedback:
@@ -52,7 +75,7 @@ export async function analyzeTranscriptWithClaude(transcript: string): Promise<S
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'x-api-key': ANTHROPIC_API_KEY,
+        'x-api-key': apiKey,
         'anthropic-version': '2023-06-01'
       },
       body: JSON.stringify({
