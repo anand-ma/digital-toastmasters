@@ -1,3 +1,4 @@
+
 import { useState, useEffect } from "react";
 import { useParams, useLocation } from "react-router-dom";
 import { 
@@ -34,7 +35,6 @@ import {
   AccordionTrigger,
 } from "@/components/ui/accordion";
 import { ElevenLabsClient } from 'elevenlabs';
-import { getElevenLabsApiKey, isElevenLabsConfigured, handleElevenLabsError } from "@/services/elevenlabs";
 
 export default function Analysis() {
   const { id } = useParams<{ id: string }>();
@@ -44,9 +44,8 @@ export default function Analysis() {
   const [recording, setRecording] = useState<Recording | null>(null);
   const [transcript, setTranscript] = useState<Transcript | null>(null);
   const [analysis, setAnalysis] = useState<SpeechAnalysisResult | null>(null);
-  const [elevenLabsClient, setElevenLabsClient] = useState<ElevenLabsClient | null>(null);
-  const [elevenLabsError, setElevenLabsError] = useState<string | null>(null);
   
+  // Add state for active tab
   const [activeTab, setActiveTab] = useState<string>("transcript");
   
   const [isPlaying, setIsPlaying] = useState<boolean>(false);
@@ -59,86 +58,34 @@ export default function Analysis() {
   
   const [originalFile, setOriginalFile] = useState<File | null>(null);
   
+  // Add this state to store the recording data
   const [recordingData, setRecordingData] = useState<any>(null);
   
-  useEffect(() => {
-    const initializeClient = async () => {
-      try {
-        const isConfigured = await isElevenLabsConfigured();
-        
-        if (!isConfigured) {
-          setElevenLabsError('ElevenLabs API key is missing or invalid');
-          toast({
-            title: "Configuration Error",
-            description: "ElevenLabs API key is missing or invalid. Please check your Supabase settings.",
-            variant: "destructive",
-          });
-          return;
-        }
-        
-        try {
-          const apiKey = await getElevenLabsApiKey();
-          
-          if (!apiKey || apiKey === 'YOUR_ELEVENLABS_API_KEY_HERE') {
-            setElevenLabsError('Invalid API key configuration');
-            toast({
-              title: "API Key Error",
-              description: "Your ElevenLabs API key appears to be invalid or is still set to the default value.",
-              variant: "destructive",
-            });
-            return;
-          }
-          
-          const client = new ElevenLabsClient({
-            apiKey: apiKey,
-          });
-          
-          setElevenLabsClient(client);
-          setElevenLabsError(null);
-          console.log("ElevenLabs client initialized successfully");
-        } catch (clientError) {
-          console.error("Error creating ElevenLabs client:", clientError);
-          setElevenLabsError('Failed to initialize ElevenLabs client');
-          toast({
-            title: "Client Error",
-            description: `Failed to initialize the ElevenLabs client: ${clientError instanceof Error ? clientError.message : String(clientError)}`,
-            variant: "destructive",
-          });
-        }
-      } catch (configError) {
-        console.error("Error checking ElevenLabs configuration:", configError);
-        setElevenLabsError('Failed to check ElevenLabs configuration');
-        toast({
-          title: "Configuration Error",
-          description: `Failed to check ElevenLabs configuration: ${configError instanceof Error ? configError.message : String(configError)}`,
-          variant: "destructive",
-        });
-      }
-    };
-    
-    initializeClient();
-  }, [toast]);
-  
+  // Update the initial useEffect to get recording data
   useEffect(() => {
     const fetchRecordingData = async () => {
       try {
+        // Try to get data from localStorage first
         const storedData = localStorage.getItem('recordingData');
         let data;
         
         if (storedData) {
           data = JSON.parse(storedData);
         } else if (location.state) {
+          // Fallback to location state if localStorage is empty
           data = location.state;
+          // Store it in localStorage for future use
           localStorage.setItem('recordingData', JSON.stringify(data));
         }
 
         if (data) {
           setRecordingData(data);
+          // Set the recording with the data
           setRecording({
             id: data.id,
             title: data.fileName,
             date: new Date().toISOString(),
-            duration: 0,
+            duration: 0, // You might want to calculate this
             videoUrl: data.blobUrl,
             audioUrl: data.blobUrl
           });
@@ -158,6 +105,7 @@ export default function Analysis() {
     fetchRecordingData();
   }, [id, location.state, toast]);
   
+  // Add cleanup for preview URL when component unmounts
   useEffect(() => {
     return () => {
       const storedData = localStorage.getItem('recordingData');
@@ -179,19 +127,15 @@ export default function Analysis() {
       });
       return;
     }
-
-    if (!elevenLabsClient) {
-      toast({
-        title: "Speech-to-Text Service Error",
-        description: elevenLabsError || "The speech-to-text service is not ready. Please check if your API key is valid and try again later.",
-        variant: "destructive",
-      });
-      return;
-    }
     
     setIsTranscribing(true);
     
     try {
+      const client = new ElevenLabsClient({
+        apiKey: "sk_b28a30dd43efe6a7c4f107d8a7536d5573e3161c1c2104aa",
+      });
+
+      // Fetch the file from the blob URL
       const response = await fetch(recordingData.blobUrl);
       const blob = await response.blob();
       
@@ -199,15 +143,12 @@ export default function Analysis() {
         type: recordingData.fileType
       });
 
-      console.log("Starting transcription with file:", audioFile.name, audioFile.type, audioFile.size);
-      
-      const transcription = await elevenLabsClient.speechToText.convert({
+      const transcription = await client.speechToText.convert({
         file: audioFile,
         model_id: "scribe_v1",
       });
 
-      console.log("Transcription successful:", transcription);
-
+      // Get the video duration
       const video = document.createElement('video');
       video.src = recordingData.blobUrl;
       await new Promise(resolve => {
@@ -215,7 +156,8 @@ export default function Analysis() {
       });
       const duration = Math.floor(video.duration);
 
-      const segmentLength = 10;
+      // Create segments for every 10 seconds
+      const segmentLength = 10; // 10 seconds per segment
       const numberOfSegments = Math.ceil(duration / segmentLength);
       const wordsArray = transcription.text.split(' ');
       const wordsPerSegment = Math.ceil(wordsArray.length / numberOfSegments);
@@ -224,6 +166,7 @@ export default function Analysis() {
         const start = index * segmentLength;
         const end = Math.min((index + 1) * segmentLength, duration);
         
+        // Get words for this segment
         const startWord = index * wordsPerSegment;
         const endWord = Math.min((index + 1) * wordsPerSegment, wordsArray.length);
         const segmentText = wordsArray.slice(startWord, endWord).join(' ');
@@ -232,7 +175,7 @@ export default function Analysis() {
           text: segmentText,
           start: start,
           end: end,
-          confidence: 0.9
+          confidence: 0.9 // Default confidence value
         };
       });
 
@@ -249,11 +192,9 @@ export default function Analysis() {
       });
     } catch (error) {
       console.error("Error transcribing audio:", error);
-      const errorMessage = handleElevenLabsError(error);
-      
       toast({
         title: "Transcription failed",
-        description: errorMessage,
+        description: `Failed to transcribe: ${error.message}`,
         variant: "destructive",
       });
     } finally {
@@ -261,6 +202,7 @@ export default function Analysis() {
     }
   };
   
+  // Add this function to handle segment click
   const handleSegmentClick = (startTime: number) => {
     const videoElement = document.querySelector('video');
     if (videoElement) {
@@ -282,9 +224,11 @@ export default function Analysis() {
     setIsAnalyzing(true);
     
     try {
+      // Use the new Claude service instead of the mock API
       const result = await analyzeTranscriptWithClaude(transcript.text);
       setAnalysis(result);
       
+      // Set the active tab to analysis when analysis is complete
       setActiveTab("analysis");
       
       toast({
@@ -331,6 +275,7 @@ export default function Analysis() {
     return "text-red-500";
   };
   
+  // Add cleanup for blob URLs
   useEffect(() => {
     return () => {
       if (recordingData?.blobUrl) {
@@ -351,12 +296,14 @@ export default function Analysis() {
           </div>
           
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+            {/* Video/Audio Player Section */}
             <div className="lg:col-span-2">
               <Card className="mb-8">
                 <CardHeader className="pb-0">
                   <CardTitle>Recording Playback</CardTitle>
                 </CardHeader>
                 <CardContent>
+                  {/* Video Player */}
                   <div className="aspect-video bg-black rounded-md overflow-hidden mb-4">
                     {recording.videoUrl ? (
                       <video
@@ -364,11 +311,12 @@ export default function Analysis() {
                         className="w-full h-full"
                         controls
                         playsInline
-                        muted={isMuted}
-                        onTimeUpdate={(e) => setCurrentTime(e.currentTarget.currentTime)}
-                        onLoadedMetadata={(e) => setDuration(e.currentTarget.duration)}
-                        onPlay={() => setIsPlaying(true)}
-                        onPause={() => setIsPlaying(false)}
+                        // These props would be controlled in a real implementation
+                        // muted={isMuted}
+                        // onTimeUpdate={(e) => setCurrentTime(e.currentTarget.currentTime)}
+                        // onLoadedMetadata={(e) => setDuration(e.currentTarget.duration)}
+                        // onPlay={() => setIsPlaying(true)}
+                        // onPause={() => setIsPlaying(false)}
                       />
                     ) : (
                       <div className="w-full h-full flex items-center justify-center bg-muted">
@@ -377,6 +325,7 @@ export default function Analysis() {
                     )}
                   </div>
                   
+                  {/* Custom Controls - These would be functional in a real implementation */}
                   <div className="flex flex-col space-y-2">
                     <div className="flex justify-between text-sm text-muted-foreground">
                       <span>{formatTime(currentTime)}</span>
@@ -401,6 +350,7 @@ export default function Analysis() {
                         </Button>
                       </div>
                       <div className="flex items-center space-x-2">
+                        {/* Placeholder for additional controls */}
                         <div className="w-8"></div>
                       </div>
                     </div>
@@ -408,6 +358,7 @@ export default function Analysis() {
                 </CardContent>
               </Card>
               
+              {/* Tabs for Transcript and Analysis */}
               <Tabs value={activeTab} onValueChange={setActiveTab} className="mb-8">
                 <TabsList className="grid grid-cols-2">
                   <TabsTrigger value="transcript" className="flex items-center gap-2">
@@ -483,6 +434,7 @@ export default function Analysis() {
                 <TabsContent value="analysis" className="p-4 border rounded-md mt-2">
                   {analysis ? (
                     <div className="space-y-6">
+                      {/* Overall Score */}
                       <div className="flex flex-col items-center py-4">
                         <div className="relative">
                           <svg className="w-32 h-32">
@@ -514,6 +466,7 @@ export default function Analysis() {
                         <p className="mt-2 font-semibold text-lg">Overall Score</p>
                       </div>
                       
+                      {/* Metrics Grid */}
                       <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
                         <Card>
                           <CardContent className="p-4 text-center">
@@ -579,7 +532,9 @@ export default function Analysis() {
                         </Card>
                       </div>
                       
+                      {/* Details Accordion */}
                       <Accordion type="multiple" className="mt-8">
+                        {/* Filler Words Analysis */}
                         <AccordionItem value="filler-words">
                           <AccordionTrigger>Filler Words</AccordionTrigger>
                           <AccordionContent>
@@ -607,6 +562,7 @@ export default function Analysis() {
                           </AccordionContent>
                         </AccordionItem>
                         
+                        {/* Grammar Issues */}
                         <AccordionItem value="grammar-issues">
                           <AccordionTrigger>Grammar Suggestions</AccordionTrigger>
                           <AccordionContent>
@@ -639,6 +595,7 @@ export default function Analysis() {
                           </AccordionContent>
                         </AccordionItem>
                         
+                        {/* Body Language Analysis - Only shown if available */}
                         {analysis.bodyLanguage && (
                           <AccordionItem value="body-language">
                             <AccordionTrigger>Body Language</AccordionTrigger>
@@ -694,6 +651,7 @@ export default function Analysis() {
                         )}
                       </Accordion>
                       
+                      {/* AI Feedback */}
                       <Card className="mt-8">
                         <CardHeader className="pb-3">
                           <CardTitle className="flex items-center gap-2">
@@ -744,6 +702,7 @@ export default function Analysis() {
               </Tabs>
             </div>
             
+            {/* Analysis Summary Sidebar */}
             <div>
               <Card className="sticky top-4">
                 <CardHeader>

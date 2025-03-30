@@ -7,7 +7,11 @@ import { Progress } from "@/components/ui/progress";
 import { useToast } from "@/components/ui/use-toast";
 import { processRecording } from "@/services/api";
 import { ElevenLabsClient } from 'elevenlabs';
-import { getElevenLabsApiKey, isElevenLabsConfigured, handleElevenLabsError } from "@/services/elevenlabs";
+
+// Initialize the ElevenLabs client outside the component
+const client = new ElevenLabsClient({
+  apiKey: "sk_b28a30dd43efe6a7c4f107d8a7536d5573e3161c1c2104aa",
+});
 
 export default function Record() {
   const navigate = useNavigate();
@@ -24,63 +28,8 @@ export default function Record() {
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<BlobPart[]>([]);
   const timerIntervalRef = useRef<number | null>(null);
-  const [elevenLabsClient, setElevenLabsClient] = useState<ElevenLabsClient | null>(null);
 
   const MAX_DURATION = 45; // 45 seconds
-
-  // Initialize ElevenLabsClient
-  useEffect(() => {
-    const initializeClient = async () => {
-      try {
-        const isConfigured = await isElevenLabsConfigured();
-        
-        if (!isConfigured) {
-          toast({
-            title: "Configuration Error",
-            description: "ElevenLabs API key is missing or invalid. Please check your Supabase settings.",
-            variant: "destructive",
-          });
-          return;
-        }
-        
-        try {
-          const apiKey = await getElevenLabsApiKey();
-          
-          if (!apiKey || apiKey === 'YOUR_ELEVENLABS_API_KEY_HERE') {
-            toast({
-              title: "API Key Error",
-              description: "Your ElevenLabs API key appears to be invalid or is still set to the default value.",
-              variant: "destructive",
-            });
-            return;
-          }
-          
-          const client = new ElevenLabsClient({
-            apiKey: apiKey,
-          });
-          
-          setElevenLabsClient(client);
-          console.log("ElevenLabs client initialized successfully");
-        } catch (error) {
-          console.error("Error initializing ElevenLabs client:", error);
-          toast({
-            title: "Error",
-            description: `Failed to initialize speech-to-text service: ${error instanceof Error ? error.message : String(error)}`,
-            variant: "destructive",
-          });
-        }
-      } catch (error) {
-        console.error("Error checking ElevenLabs configuration:", error);
-        toast({
-          title: "Error",
-          description: "Failed to check speech-to-text service configuration.",
-          variant: "destructive",
-        });
-      }
-    };
-    
-    initializeClient();
-  }, [toast]);
 
   // Request camera and microphone permissions
   useEffect(() => {
@@ -245,15 +194,6 @@ export default function Record() {
       return;
     }
     
-    if (!elevenLabsClient) {
-      toast({
-        title: "Service not ready",
-        description: "Speech-to-text service is not ready. Please try again later.",
-        variant: "destructive",
-      });
-      return;
-    }
-    
     setIsProcessing(true);
     
     const progressInterval = setInterval(() => {
@@ -276,8 +216,7 @@ export default function Record() {
 
       // Convert to audio file for ElevenLabs
       try {
-        console.log("Starting transcription with ElevenLabs...");
-        const transcription = await elevenLabsClient.speechToText.convert({
+        const transcription = await client.speechToText.convert({
           file: videoFile,
           model_id: "scribe_v1",
         });
@@ -323,8 +262,7 @@ export default function Record() {
         });
       } catch (transcriptionError) {
         console.error("Transcription error:", transcriptionError);
-        const errorMessage = handleElevenLabsError(transcriptionError);
-        throw new Error(errorMessage);
+        throw new Error("Failed to transcribe the recording");
       }
     } catch (error) {
       console.error("Error processing recording:", error);
@@ -340,6 +278,7 @@ export default function Record() {
     }
   };
 
+  // Modify the playRecording function
   const playRecording = () => {
     if (videoRef.current && videoBlob) {
       // Stop current playback and remove existing source
@@ -371,6 +310,7 @@ export default function Record() {
     }
   };
 
+  // Add cleanup for video source in the cleanup effect
   useEffect(() => {
     return () => {
       if (videoRef.current && videoRef.current.src) {
@@ -399,6 +339,7 @@ export default function Record() {
       
       <Card className="mb-8">
         <CardContent className="p-6 flex flex-col items-center">
+          {/* Video Preview */}
           <div className="relative w-full aspect-video bg-black rounded-lg overflow-hidden mb-6">
             {!permission && (
               <div className="absolute inset-0 flex flex-col items-center justify-center text-white bg-black/90">
@@ -445,6 +386,7 @@ export default function Record() {
             )}
           </div>
           
+          {/* Add upload progress bar */}
           {uploadProgress > 0 && (
             <div className="w-full mb-6">
               <div className="flex justify-between mb-2">
@@ -455,6 +397,7 @@ export default function Record() {
             </div> 
           )}
           
+          {/* Timer and Progress */}
           <div className="w-full mb-6">
             <div className="flex justify-between mb-2">
               <div className="flex items-center">
@@ -468,6 +411,7 @@ export default function Record() {
             <Progress value={(elapsedTime / MAX_DURATION) * 100} className="h-2" />
           </div>
           
+          {/* Recording Controls */}
           <div className="flex flex-wrap gap-4 justify-center">
             {!recording && !videoBlob && (
               <Button 

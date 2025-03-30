@@ -1,6 +1,5 @@
 
 // Mock data and API service interfaces
-import { supabase } from '@/integrations/supabase/client';
 
 // Speech analysis result type
 export interface SpeechAnalysisResult {
@@ -168,25 +167,4 @@ export async function getUserRecordings(): Promise<Recording[]> {
       }
     }
   ];
-}
-
-// Add a function to check if an API key exists in the database
-export async function checkApiKeyExists(keyName: string): Promise<boolean> {
-  try {
-    const { data, error } = await supabase
-      .from('api_keys')
-      .select('value')
-      .eq('name', keyName)
-      .single();
-    
-    if (error || !data) {
-      console.error(`API key ${keyName} not found:`, error);
-      return false;
-    }
-    
-    return true;
-  } catch (error) {
-    console.error(`Error checking for ${keyName}:`, error);
-    return false;
-  }
 }
