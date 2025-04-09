@@ -24,6 +24,7 @@ export default function Record() {
   const [isProcessing, setIsProcessing] = useState<boolean>(false);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [uploadProgress, setUploadProgress] = useState<number>(0);
+  const [storedRecording, setStoredRecording] = useState<string | null>(null);
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<BlobPart[]>([]);
@@ -42,6 +43,10 @@ export default function Record() {
         
         if (videoRef.current) {
           videoRef.current.srcObject = stream;
+          videoRef.current.muted = true; // Keep muted until recording starts
+          videoRef.current.play().catch(error => {
+            console.error("Error playing video:", error);
+          });
         }
         
         setPermission(true);
@@ -58,43 +63,35 @@ export default function Record() {
     
     requestPermissions();
     
-    // Clean up function
     return () => {
-      // Stop all media tracks
       if (videoRef.current && videoRef.current.srcObject) {
         const stream = videoRef.current.srcObject as MediaStream;
         stream.getTracks().forEach(track => track.stop());
       }
       
-      // Clear timer if active
       if (timerIntervalRef.current) {
         clearInterval(timerIntervalRef.current);
       }
     };
   }, [toast]);
 
-  const startTimer = () => {
-    if (timerIntervalRef.current) {
-      clearInterval(timerIntervalRef.current);
+  // Load recording from localStorage on component mount
+  useEffect(() => {
+    const savedRecording = localStorage.getItem('recording');
+    if (savedRecording) {
+      setStoredRecording(savedRecording);
+      // Convert base64 to blob
+      const byteCharacters = atob(savedRecording);
+      const byteArrays = [];
+      for (let i = 0; i < byteCharacters.length; i++) {
+        byteArrays.push(byteCharacters.charCodeAt(i));
+      }
+      const blob = new Blob([new Uint8Array(byteArrays)], { type: 'video/webm' });
+      setVideoBlob(blob);
+      const url = URL.createObjectURL(blob);
+      setPreviewUrl(url);
     }
-    
-    timerIntervalRef.current = window.setInterval(() => {
-      setElapsedTime(prev => {
-        if (prev >= MAX_DURATION) {
-          stopRecording();
-          return MAX_DURATION;
-        }
-        return prev + 1;
-      });
-    }, 1000);
-  };
-
-  const stopTimer = () => {
-    if (timerIntervalRef.current) {
-      clearInterval(timerIntervalRef.current);
-      timerIntervalRef.current = null;
-    }
-  };
+  }, []);
 
   const startRecording = () => {
     if (!permission) {
@@ -106,52 +103,127 @@ export default function Record() {
       return;
     }
     
-    // Reset variables
-    chunksRef.current = [];
-    setElapsedTime(0);
-    
-    // Get media stream
-    const stream = videoRef.current?.srcObject as MediaStream;
-    if (!stream) return;
-    
-    // Create MediaRecorder with specific options
-    const mediaRecorder = new MediaRecorder(stream, {
-      mimeType: 'video/webm;codecs=vp8,opus',
-      videoBitsPerSecond: 2500000,
-      audioBitsPerSecond: 128000
-    });
-    mediaRecorderRef.current = mediaRecorder;
-    
-    // Handle data available event
-    mediaRecorder.ondataavailable = (e) => {
-      if (e.data.size > 0) {
-        chunksRef.current.push(e.data);
+    try {
+      // Reset variables
+      chunksRef.current = [];
+      setElapsedTime(0);
+      setVideoBlob(null);
+      setPreviewUrl(null);
+      setStoredRecording(null);
+      
+      // Get media stream
+      const stream = videoRef.current?.srcObject as MediaStream;
+      if (!stream) {
+        throw new Error("No media stream available");
       }
-    };
-    
-    // Handle recording stopped
-    mediaRecorder.onstop = () => {
-      const blob = new Blob(chunksRef.current, { type: 'video/webm' });
-      setVideoBlob(blob);
-      // Create and set preview URL
-      const url = URL.createObjectURL(blob);
-      setPreviewUrl(url);
-      stopTimer();
-      setRecording(false);
+      
+      // Create MediaRecorder with specific options
+      const mediaRecorder = new MediaRecorder(stream, {
+        mimeType: 'video/webm;codecs=vp8,opus',
+        videoBitsPerSecond: 2500000,
+        audioBitsPerSecond: 128000
+      });
+      
+      mediaRecorderRef.current = mediaRecorder;
+      
+      // Handle data available event
+      mediaRecorder.ondataavailable = (e) => {
+        if (e.data.size > 0) {
+          chunksRef.current.push(e.data);
+        }
+      };
+
+      // Start recording
+      mediaRecorder.start(1000); // Request data every second
+      setRecording(true);
       setPaused(false);
-    };
-    
-    // Start recording
-    mediaRecorder.start();
-    startTimer();
-    setRecording(true);
-    setPaused(false);
+
+      // Start the timer
+      const startTime = Date.now();
+      const stopTime = startTime + (MAX_DURATION * 1000);
+      
+      const checkTime = () => {
+        const currentTime = Date.now();
+        const elapsed = Math.floor((currentTime - startTime) / 1000);
+        setElapsedTime(elapsed);
+        
+        if (currentTime >= stopTime) {
+          // Stop the recording
+          if (mediaRecorderRef.current && recording) {
+            mediaRecorderRef.current.stop();
+            setRecording(false);
+            setPaused(false);
+            
+            // Create final blob
+            const blob = new Blob(chunksRef.current, { type: 'video/webm' });
+            setVideoBlob(blob);
+            
+            // Save to localStorage
+            const reader = new FileReader();
+            reader.onloadend = () => {
+              const base64data = reader.result as string;
+              const base64String = base64data.split(',')[1];
+              localStorage.setItem('recording', base64String);
+              setStoredRecording(base64String);
+              
+              // Enable video controls
+              if (videoRef.current) {
+                videoRef.current.controls = true;
+              }
+              
+              // Show success message
+              toast({
+                title: "Time Limit Reached",
+                description: "Recording stopped at 45 seconds. You can now play your recording.",
+              });
+            };
+            reader.readAsDataURL(blob);
+            
+            // Stop media stream
+            if (videoRef.current && videoRef.current.srcObject) {
+              const stream = videoRef.current.srcObject as MediaStream;
+              stream.getTracks().forEach(track => track.stop());
+            }
+          }
+        } else {
+          // Continue checking
+          requestAnimationFrame(checkTime);
+        }
+      };
+      
+      // Start checking time
+      requestAnimationFrame(checkTime);
+
+      // Unmute video when recording starts
+      if (videoRef.current) {
+        videoRef.current.muted = false;
+      }
+
+      toast({
+        title: "Recording Started",
+        description: "Your recording has begun.",
+      });
+    } catch (error) {
+      console.error("Error starting recording:", error);
+      toast({
+        title: "Recording Error",
+        description: "Failed to start recording. Please try again.",
+        variant: "destructive",
+      });
+    }
+  };
+
+  const stopTimer = () => {
+    if (timerIntervalRef.current) {
+      clearInterval(timerIntervalRef.current);
+      timerIntervalRef.current = null;
+    }
   };
 
   const pauseRecording = () => {
     if (mediaRecorderRef.current && recording && !paused) {
       mediaRecorderRef.current.pause();
-      stopTimer();
+      timerIntervalRef.current = null;
       setPaused(true);
     }
   };
@@ -159,29 +231,172 @@ export default function Record() {
   const resumeRecording = () => {
     if (mediaRecorderRef.current && recording && paused) {
       mediaRecorderRef.current.resume();
-      startTimer();
+      // startTimer();
       setPaused(false);
     }
   };
 
   const stopRecording = () => {
-    if (mediaRecorderRef.current && recording) {
+    if (!mediaRecorderRef.current || !recording) {
+      return;
+    }
+
+    try {
+      // Set up the data handler before stopping
+      mediaRecorderRef.current.ondataavailable = async (e) => {
+        if (e.data.size > 0) {
+          chunksRef.current.push(e.data);
+          
+          // Create blob from all chunks
+          const blob = new Blob(chunksRef.current, { type: 'video/webm' });
+          setVideoBlob(blob);
+
+          // Convert to base64 and save
+          const reader = new FileReader();
+          reader.onloadend = () => {
+            try {
+              const base64data = reader.result as string;
+              const base64String = base64data.split(',')[1];
+              localStorage.setItem('recording', base64String);
+              setStoredRecording(base64String);
+              
+              // Enable video controls
+              if (videoRef.current) {
+                videoRef.current.controls = true;
+              }
+              
+              toast({
+                title: "Recording Complete",
+                description: "Your recording has been saved successfully.",
+              });
+            } catch (error) {
+              console.error("Error saving to localStorage:", error);
+              toast({
+                title: "Save Error",
+                description: "Failed to save the recording.",
+                variant: "destructive",
+              });
+            }
+          };
+          reader.readAsDataURL(blob);
+        }
+      };
+
+      // Stop the recording
+      mediaRecorderRef.current.requestData();
       mediaRecorderRef.current.stop();
-      stopTimer();
+      timerIntervalRef.current = null;
+      setRecording(false);
+      setPaused(false);
+
+      // Stop the media stream tracks
+      if (videoRef.current && videoRef.current.srcObject) {
+        const stream = videoRef.current.srcObject as MediaStream;
+        stream.getTracks().forEach(track => track.stop());
+      }
+
+    } catch (error) {
+      console.error("Error stopping recording:", error);
+      toast({
+        title: "Recording Error",
+        description: "Failed to stop recording properly.",
+        variant: "destructive",
+      });
     }
   };
 
-  const resetRecording = () => {
-    if (videoRef.current && videoRef.current.src) {
-      URL.revokeObjectURL(videoRef.current.src);
-      videoRef.current.src = '';
+  // Helper function to convert blob to base64
+  const blobToBase64 = (blob: Blob): Promise<string> => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        if (typeof reader.result === 'string') {
+          const base64String = reader.result.split(',')[1];
+          resolve(base64String);
+        } else {
+          reject(new Error('Failed to convert blob to base64'));
+        }
+      };
+      reader.onerror = () => reject(new Error('Failed to read blob'));
+      reader.readAsDataURL(blob);
+    });
+  };
+
+  const resetRecording = async () => {
+    try {
+      // Clear video element
+      if (videoRef.current) {
+        // Stop any current playback
+        videoRef.current.pause();
+        
+        // Clear video source
+        if (videoRef.current.src) {
+          URL.revokeObjectURL(videoRef.current.src);
+          videoRef.current.src = '';
+        }
+        
+        // Stop and clear existing stream
+        if (videoRef.current.srcObject) {
+          const stream = videoRef.current.srcObject as MediaStream;
+          stream.getTracks().forEach(track => track.stop());
+          videoRef.current.srcObject = null;
+        }
+      }
+
+      // Clear preview URL
+      if (previewUrl) {
+        URL.revokeObjectURL(previewUrl);
+        setPreviewUrl(null);
+      }
+
+      // Reset all states
+      setVideoBlob(null);
+      setStoredRecording(null);
+      setElapsedTime(0);
+      setPaused(false);
+      setRecording(false);
+
+      // Clear localStorage
+      localStorage.removeItem('recording');
+
+      // Get new media stream
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({
+          video: true,
+          audio: true,
+        });
+
+        if (videoRef.current) {
+          videoRef.current.srcObject = stream;
+          videoRef.current.muted = true;
+          videoRef.current.play().catch(error => {
+            console.error("Error playing video:", error);
+          });
+        }
+
+        // Start new recording
+        startRecording();
+
+        toast({
+          title: "Recording Reset",
+          description: "Starting a new recording...",
+        });
+      } catch (error) {
+        console.error("Error getting media stream:", error);
+        toast({
+          title: "Camera Error",
+          description: "Failed to access camera. Please check permissions.",
+          variant: "destructive",
+        });
+      }
+    } catch (error) {
+      console.error("Error resetting recording:", error);
+      toast({
+        title: "Reset Error",
+        description: "Failed to reset the recording state.",
+        variant: "destructive",
+      });
     }
-    if (previewUrl) {
-      URL.revokeObjectURL(previewUrl);
-      setPreviewUrl(null);
-    }
-    setVideoBlob(null);
-    setElapsedTime(0);
   };
 
   const handleProcess = async () => {
@@ -278,35 +493,97 @@ export default function Record() {
     }
   };
 
-  // Modify the playRecording function
-  const playRecording = () => {
-    if (videoRef.current && videoBlob) {
-      // Stop current playback and remove existing source
-      videoRef.current.pause();
-      if (videoRef.current.src) {
-        URL.revokeObjectURL(videoRef.current.src);
-      }
-
-      // Create new blob URL
-      const url = URL.createObjectURL(videoBlob);
-      videoRef.current.src = url;
-      videoRef.current.muted = false;
-
-      // Play the video
-      videoRef.current.play().catch(error => {
-        console.error("Error playing video:", error);
+  const playRecording = async () => {
+    console.log("Play recording button clicked");
+    
+    try {
+      // Get recording from localStorage
+      const savedRecording = localStorage.getItem('recording');
+      console.log("Saved recording exists:", !!savedRecording);
+      
+      if (!savedRecording) {
         toast({
-          title: "Playback Error",
-          description: "Failed to play the recording.",
+          title: "No Recording Found",
+          description: "There is no saved recording to play.",
           variant: "destructive",
         });
-      });
+        return;
+      }
 
-      // Clean up URL only when switching source or component unmounts
-      videoRef.current.onloadeddata = () => {
-        // Video is loaded and ready to play
-        console.log("Video loaded successfully");
-      };
+      if (!videoRef.current) {
+        console.error("Video element not found");
+        return;
+      }
+
+      // Reset video element
+      if (videoRef.current.srcObject) {
+        // If we have a camera stream, stop it
+        const stream = videoRef.current.srcObject as MediaStream;
+        stream.getTracks().forEach(track => track.stop());
+        videoRef.current.srcObject = null;
+      }
+
+      try {
+        // Convert base64 to blob
+        const byteString = atob(savedRecording);
+        const arrayBuffer = new ArrayBuffer(byteString.length);
+        const uint8Array = new Uint8Array(arrayBuffer);
+        
+        for (let i = 0; i < byteString.length; i++) {
+          uint8Array[i] = byteString.charCodeAt(i);
+        }
+        
+        const blob = new Blob([arrayBuffer], { type: 'video/webm' });
+        console.log("Created blob:", blob.size, "bytes");
+
+        // Create object URL
+        const url = URL.createObjectURL(blob);
+        console.log("Created URL:", url);
+
+        // Configure video element
+        videoRef.current.src = url;
+        videoRef.current.muted = false;
+        videoRef.current.controls = true;
+        videoRef.current.style.objectFit = "contain"; // Show full video without cropping
+
+        // Play the video
+        console.log("Attempting to play video");
+        videoRef.current.load();
+        
+        const playPromise = videoRef.current.play();
+        if (playPromise !== undefined) {
+          playPromise
+            .then(() => {
+              console.log("Video playing successfully");
+              toast({
+                title: "Playing Recording",
+                description: "Your recording is now playing. Use the video controls to pause, play, or adjust volume.",
+              });
+            })
+            .catch(error => {
+              console.error("Error playing video:", error);
+              toast({
+                title: "Click to Play",
+                description: "Please click the play button in the video player.",
+              });
+            });
+        }
+
+      } catch (error) {
+        console.error("Error processing video data:", error);
+        toast({
+          title: "Playback Error",
+          description: "Failed to process the recording.",
+          variant: "destructive",
+        });
+      }
+    } catch (error) {
+      console.error("Error in playRecording:", error);
+      toast({
+        title: "Playback Error",
+        description: "An unexpected error occurred.",
+        variant: "destructive",
+      });
     }
   };
 
@@ -340,7 +617,7 @@ export default function Record() {
       <Card className="mb-8">
         <CardContent className="p-6 flex flex-col items-center">
           {/* Video Preview */}
-          <div className="relative w-full aspect-video bg-black rounded-lg overflow-hidden mb-6">
+          <div className="relative w-full aspect-video bg-black rounded-lg overflow-hidden mb-4">
             {!permission && (
               <div className="absolute inset-0 flex flex-col items-center justify-center text-white bg-black/90">
                 <MicOff className="h-16 w-16 mb-4" />
@@ -359,50 +636,46 @@ export default function Record() {
             
             <video 
               ref={videoRef} 
-              autoPlay 
-              muted={!recording} 
               playsInline 
-              className="w-full h-full object-cover"
+              className="w-full h-full"
+              controls={!recording}
+              muted={recording}
+              style={{ objectFit: recording ? "cover" : "contain" }}
+              onLoadedData={() => console.log("Video loaded")}
+              onPlay={() => console.log("Video play event")}
               onError={(e) => {
                 console.error("Video error:", e);
-              }}
-              onEnded={() => {
-                if (videoRef.current) {
-                  videoRef.current.currentTime = 0;
-                }
+                toast({
+                  title: "Video Error",
+                  description: "There was an error with the video playback.",
+                  variant: "destructive",
+                });
               }}
             />
-            
-            {videoBlob && !recording && (
-              <div className="absolute inset-0 flex items-center justify-center bg-black/50">
-                <Button
-                  variant="outline"
-                  className="bg-primary/80 hover:bg-primary text-white hover:text-white"
-                  onClick={playRecording}
-                >
-                  <Play className="h-6 w-6 mr-2" /> Play Recording
-                </Button>
-              </div>
-            )}
           </div>
-          
-          {/* Add upload progress bar */}
-          {uploadProgress > 0 && (
-            <div className="w-full mb-6">
-              <div className="flex justify-between mb-2">
-                <span className="text-sm">Processing...</span>
-                <span className="text-sm">{uploadProgress}%</span>
-              </div>
-              <Progress value={uploadProgress} className="h-2" />
-            </div> 
+
+          {/* Play Recording Button - Moved below video */}
+          {!recording && localStorage.getItem('recording') && (
+            <div className="w-full flex justify-center mb-4">
+              <Button
+                variant="outline"
+                className="bg-primary/80 hover:bg-primary text-white hover:text-white"
+                onClick={() => {
+                  console.log("Play button clicked");
+                  playRecording();
+                }}
+              >
+                <Play className="h-6 w-6 mr-2" /> Play Recording
+              </Button>
+            </div>
           )}
-          
+
           {/* Timer and Progress */}
           <div className="w-full mb-6">
             <div className="flex justify-between mb-2">
               <div className="flex items-center">
                 <Clock className="h-4 w-4 mr-1 text-muted-foreground" />
-                <span>{formatTime(elapsedTime)} / {formatTime(MAX_DURATION)}</span>
+                <span className="timer-display">{formatTime(elapsedTime)} / {formatTime(MAX_DURATION)}</span>
               </div>
               <span className="text-muted-foreground">
                 {Math.round((elapsedTime / MAX_DURATION) * 100)}%
