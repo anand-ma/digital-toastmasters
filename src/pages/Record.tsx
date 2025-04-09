@@ -10,7 +10,7 @@ import { ElevenLabsClient } from 'elevenlabs';
 
 // Initialize the ElevenLabs client outside the component
 const client = new ElevenLabsClient({
-  apiKey: "sk_b28a30dd43efe6a7c4f107d8a7536d5573e3161c1c2104aa",
+  apiKey: "sk_5107b1d8a09b89f5713d704698dc754fd7cbd02cb76763af",
 });
 
 export default function Record() {
@@ -28,7 +28,7 @@ export default function Record() {
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const chunksRef = useRef<BlobPart[]>([]);
-  const timerIntervalRef = useRef<number | null>(null);
+  const progressIntervalRef = useRef<number | null>(null);
 
   const MAX_DURATION = 45; // 45 seconds
 
@@ -69,8 +69,8 @@ export default function Record() {
         stream.getTracks().forEach(track => track.stop());
       }
       
-      if (timerIntervalRef.current) {
-        clearInterval(timerIntervalRef.current);
+      if (progressIntervalRef.current) {
+        cancelAnimationFrame(progressIntervalRef.current);
       }
     };
   }, [toast]);
@@ -116,10 +116,31 @@ export default function Record() {
       if (!stream) {
         throw new Error("No media stream available");
       }
+
+      // Check supported MIME types
+      const mimeTypes = [
+        'video/webm;codecs=vp8,opus',
+        'video/webm;codecs=vp9,opus',
+        'video/webm;codecs=h264,opus',
+        'video/webm',
+        'video/mp4'
+      ];
+
+      let selectedMimeType = '';
+      for (const mimeType of mimeTypes) {
+        if (MediaRecorder.isTypeSupported(mimeType)) {
+          selectedMimeType = mimeType;
+          break;
+        }
+      }
+
+      if (!selectedMimeType) {
+        throw new Error("No supported MIME type found for recording");
+      }
       
-      // Create MediaRecorder with specific options
+      // Create MediaRecorder with supported MIME type
       const mediaRecorder = new MediaRecorder(stream, {
-        mimeType: 'video/webm;codecs=vp8,opus',
+        mimeType: selectedMimeType,
         videoBitsPerSecond: 2500000,
         audioBitsPerSecond: 128000
       });
@@ -138,14 +159,13 @@ export default function Record() {
       setRecording(true);
       setPaused(false);
 
-      // Start the timer
+      // Start progress tracking
       const startTime = Date.now();
       const stopTime = startTime + (MAX_DURATION * 1000);
       
-      const checkTime = () => {
+      const updateProgress = () => {
         const currentTime = Date.now();
         const elapsed = Math.floor((currentTime - startTime) / 1000);
-        setElapsedTime(elapsed);
         
         if (currentTime >= stopTime) {
           // Stop the recording
@@ -185,14 +205,16 @@ export default function Record() {
               stream.getTracks().forEach(track => track.stop());
             }
           }
-        } else {
-          // Continue checking
-          requestAnimationFrame(checkTime);
+          return;
+        }
+        
+        setElapsedTime(elapsed);
+        if (!paused) {
+          progressIntervalRef.current = requestAnimationFrame(updateProgress);
         }
       };
       
-      // Start checking time
-      requestAnimationFrame(checkTime);
+      progressIntervalRef.current = requestAnimationFrame(updateProgress);
 
       // Unmute video when recording starts
       if (videoRef.current) {
@@ -213,17 +235,13 @@ export default function Record() {
     }
   };
 
-  const stopTimer = () => {
-    if (timerIntervalRef.current) {
-      clearInterval(timerIntervalRef.current);
-      timerIntervalRef.current = null;
-    }
-  };
-
   const pauseRecording = () => {
     if (mediaRecorderRef.current && recording && !paused) {
       mediaRecorderRef.current.pause();
-      timerIntervalRef.current = null;
+      if (progressIntervalRef.current) {
+        cancelAnimationFrame(progressIntervalRef.current);
+        progressIntervalRef.current = null;
+      }
       setPaused(true);
     }
   };
@@ -231,7 +249,27 @@ export default function Record() {
   const resumeRecording = () => {
     if (mediaRecorderRef.current && recording && paused) {
       mediaRecorderRef.current.resume();
-      // startTimer();
+      const currentTime = Date.now();
+      const elapsed = elapsedTime;
+      const remainingTime = MAX_DURATION - elapsed;
+      const stopTime = currentTime + (remainingTime * 1000);
+      
+      const updateProgress = () => {
+        const now = Date.now();
+        const newElapsed = elapsed + Math.floor((now - currentTime) / 1000);
+        
+        if (now >= stopTime) {
+          stopRecording();
+          return;
+        }
+        
+        setElapsedTime(newElapsed);
+        if (!paused) {
+          progressIntervalRef.current = requestAnimationFrame(updateProgress);
+        }
+      };
+      
+      progressIntervalRef.current = requestAnimationFrame(updateProgress);
       setPaused(false);
     }
   };
@@ -242,6 +280,11 @@ export default function Record() {
     }
 
     try {
+      if (progressIntervalRef.current) {
+        cancelAnimationFrame(progressIntervalRef.current);
+        progressIntervalRef.current = null;
+      }
+
       // Set up the data handler before stopping
       mediaRecorderRef.current.ondataavailable = async (e) => {
         if (e.data.size > 0) {
@@ -285,7 +328,6 @@ export default function Record() {
       // Stop the recording
       mediaRecorderRef.current.requestData();
       mediaRecorderRef.current.stop();
-      timerIntervalRef.current = null;
       setRecording(false);
       setPaused(false);
 
@@ -671,18 +713,20 @@ export default function Record() {
           )}
 
           {/* Timer and Progress */}
-          <div className="w-full mb-6">
-            <div className="flex justify-between mb-2">
-              <div className="flex items-center">
-                <Clock className="h-4 w-4 mr-1 text-muted-foreground" />
-                <span className="timer-display">{formatTime(elapsedTime)} / {formatTime(MAX_DURATION)}</span>
+          {(recording || paused) && (
+            <div className="w-full mb-6">
+              <div className="flex justify-between mb-2">
+                <div className="flex items-center">
+                  <Clock className="h-4 w-4 mr-1 text-muted-foreground" />
+                  <span className="timer-display">{formatTime(elapsedTime)} / {formatTime(MAX_DURATION)}</span>
+                </div>
+                <span className="text-muted-foreground">
+                  {Math.round((elapsedTime / MAX_DURATION) * 100)}%
+                </span>
               </div>
-              <span className="text-muted-foreground">
-                {Math.round((elapsedTime / MAX_DURATION) * 100)}%
-              </span>
+              <Progress value={(elapsedTime / MAX_DURATION) * 100} className="h-2" />
             </div>
-            <Progress value={(elapsedTime / MAX_DURATION) * 100} className="h-2" />
-          </div>
+          )}
           
           {/* Recording Controls */}
           <div className="flex flex-wrap gap-4 justify-center">
