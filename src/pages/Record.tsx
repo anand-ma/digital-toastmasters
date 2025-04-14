@@ -35,47 +35,35 @@ export default function Record() {
     try {
       const videoFile = new File([state.videoBlob], "recording.webm", { type: "video/webm" });
       const recording = await processRecording(videoFile);
+      
+      // Create a new blob from the file to ensure consistency
+      const fileBlob = new Blob([videoFile], { type: videoFile.type });
+      const blobUrl = URL.createObjectURL(fileBlob);
 
-      try {
-        const transcription = await client.speechToText.convert({
-          file: videoFile,
-          model_id: "scribe_v1",
-        });
+      const recordingData = {
+        id: recording.id,
+        fileName: videoFile.name,
+        fileType: videoFile.type,
+        fileSize: videoFile.size,
+        blobUrl: blobUrl,
+        previewUrl: blobUrl,
+        isRecorded: true
+      };
 
-        console.log("Transcription result:", transcription.text);
-
-        const videoBlobUrl = URL.createObjectURL(state.videoBlob);
-        
-        const recordingData = {
-          id: recording.id,
-          fileName: "recording.webm",
-          fileType: "video/webm",
-          fileSize: videoFile.size,
-          transcription: transcription.text,
-          isRecorded: true,
-          blobUrl: videoBlobUrl,
-          previewUrl: videoBlobUrl,
-          videoBlob: state.videoBlob
-        };
-
-        const storageData = {
-          ...recordingData,
-          videoBlob: null
-        };
-        localStorage.setItem('recordingData', JSON.stringify(storageData));
-        
-        toast({
-          title: "Recording processed",
-          description: "Your speech has been transcribed successfully!",
-        });
-        
-        navigate(`/analysis/${recording.id}`, {
-          state: recordingData
-        });
-      } catch (transcriptionError) {
-        console.error("Transcription error:", transcriptionError);
-        throw new Error("Failed to transcribe the recording");
-      }
+      // Store in localStorage without the blob
+      const storageData = {
+        ...recordingData
+      };
+      localStorage.setItem('recordingData', JSON.stringify(storageData));
+      
+      toast({
+        title: "Recording processed",
+        description: "Your recording has been saved. You can now generate the transcript.",
+      });
+      
+      navigate(`/analysis/${recording.id}`, {
+        state: recordingData
+      });
     } catch (error) {
       console.error("Error processing recording:", error);
       toast({

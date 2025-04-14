@@ -35,6 +35,16 @@ import {
 } from "@/components/ui/accordion";
 import { ElevenLabsClient } from 'elevenlabs';
 
+interface RecordingData {
+  id: string;
+  fileName: string;
+  fileType: string;
+  fileSize: number;
+  blobUrl: string;
+  previewUrl: string | null;
+  isRecorded?: boolean;
+}
+
 export default function Analysis() {
   const { id } = useParams<{ id: string }>();
   const location = useLocation();
@@ -58,7 +68,7 @@ export default function Analysis() {
   const [originalFile, setOriginalFile] = useState<File | null>(null);
   
   // Add this state to store the recording data
-  const [recordingData, setRecordingData] = useState<any>(null);
+  const [recordingData, setRecordingData] = useState<RecordingData | null>(null);
   
   // Update the initial useEffect to get recording data
   useEffect(() => {
@@ -150,33 +160,45 @@ export default function Analysis() {
       // Get the video duration
       const video = document.createElement('video');
       video.src = recordingData.blobUrl;
-      await new Promise(resolve => {
+      await new Promise((resolve, reject) => {
         video.addEventListener('loadedmetadata', resolve);
+        video.addEventListener('error', reject);
       });
-      const duration = Math.floor(video.duration);
+      
+      // Ensure we have a valid duration and transcription
+      const duration = Math.max(1, Math.floor(video.duration || 1));
+      if (!transcription.text) {
+        throw new Error("No transcription text received");
+      }
 
       // Create segments for every 10 seconds
       const segmentLength = 10; // 10 seconds per segment
-      const numberOfSegments = Math.ceil(duration / segmentLength);
-      const wordsArray = transcription.text.split(' ');
-      const wordsPerSegment = Math.ceil(wordsArray.length / numberOfSegments);
-
-      const segments = Array.from({ length: numberOfSegments }, (_, index) => {
-        const start = index * segmentLength;
-        const end = Math.min((index + 1) * segmentLength, duration);
+      const numberOfSegments = Math.max(1, Math.ceil(duration / segmentLength));
+      const wordsArray = transcription.text.split(' ').filter(word => word.trim().length > 0);
+      
+      // Ensure we have at least one word per segment
+      const wordsPerSegment = Math.max(1, Math.ceil(wordsArray.length / numberOfSegments));
+      
+      // Create segments safely
+      const segments = [];
+      for (let i = 0; i < numberOfSegments; i++) {
+        const start = i * segmentLength;
+        const end = Math.min((i + 1) * segmentLength, duration);
         
         // Get words for this segment
-        const startWord = index * wordsPerSegment;
-        const endWord = Math.min((index + 1) * wordsPerSegment, wordsArray.length);
+        const startWord = i * wordsPerSegment;
+        const endWord = Math.min((i + 1) * wordsPerSegment, wordsArray.length);
         const segmentText = wordsArray.slice(startWord, endWord).join(' ');
-
-        return {
-          text: segmentText,
-          start: start,
-          end: end,
-          confidence: 0.9 // Default confidence value
-        };
-      });
+        
+        if (segmentText.trim().length > 0) {
+          segments.push({
+            text: segmentText,
+            start: start,
+            end: end,
+            confidence: 0.9 // Default confidence value
+          });
+        }
+      }
 
       const newTranscript: Transcript = {
         text: transcription.text,

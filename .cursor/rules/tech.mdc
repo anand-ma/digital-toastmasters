@@ -1,0 +1,7 @@
+---
+description: 
+globs: *.tsx,*.ts
+alwaysApply: false
+---
+    - Favour using React Server Components and Next.js SSR features where possible
+    - Minimize the usage of client components ('use client') to small, isolated components
